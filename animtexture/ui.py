@@ -1,4 +1,8 @@
+from . import ops
 import bpy
+AnimtextureProperties = ops.AnimtextureProperties
+get_active_ShaderNodeTexImage = ops.get_active_ShaderNodeTexImage
+
 from bpy.types import (
         Operator,
         Panel,
@@ -10,7 +14,6 @@ from bpy.props import (
         )
 
         
-
 class VIEW3D_PT_animall(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -23,23 +26,12 @@ class VIEW3D_PT_animall(Panel):
         return context.active_object and context.active_object.type == 'MESH'
 
     def draw(self, context):
-        obj = context.active_object
+        tex = get_active_ShaderNodeTexImage(context.active_object)
 
-        def get_msg(o):
-            if len(obj.material_slots) == 0:
-                return "Add materials."
-            mat = obj.material_slots[obj.active_material_index].material
-            if not mat:
-                return "Select a filled material slot."
-            if not mat.use_nodes:
-                return "Material not using nodes."
-            if not mat.use_nodes:
-                return "Material not using nodes."
-            if not mat.node_tree.nodes.active.type != 'TEX_IMAGE':
-                return "Select a texture node."
-            return "yo"
-        msg = get_msg()
-        
+        if not tex:
+            msg = "Select an Image Texture node."
+        else:
+            msg = ""
 
         layout = self.layout
         col = layout.column(align=True)
@@ -47,8 +39,12 @@ class VIEW3D_PT_animall(Panel):
         row.label(text=msg)
         #col.separator()
 
-        #row.prop(animall_properties, "key_tilt")
-        #row.operator("anim.insert_keyframe_animall", icon="KEY_HLT")
+        row.prop(tex.animtexture, "dimensions")
+        row = col.row()
+        row.prop(tex, "animtexturekey")
+        row = col.row()
+        row.operator("anim.insert_keyframe_animtexture", icon="KEY_HLT")
+
 
 
 # Add-ons Preferences Update Panel
@@ -97,15 +93,3 @@ class AnimtextureAddonPreferences(AddonPreferences):
         col.label(text="Tab Category:")
         col.prop(self, "category", text="")
 
-        
-
-
-
-register_classes = [AnimtextureAddonPreferences]
-def register():
-    for cls in register_classes:
-        bpy.utils.register_class(cls)
-
-def unregister():
-    for cls in register_classes:
-        bpy.utils.unregister_class(cls)

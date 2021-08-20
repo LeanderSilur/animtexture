@@ -1,3 +1,9 @@
+"""
+Auto load wird momentan nicht verwendet.
+
+"""
+
+
 import os
 import bpy
 import sys
