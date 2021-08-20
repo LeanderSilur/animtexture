@@ -20,15 +20,32 @@ class VIEW3D_PT_animall(Panel):
 
     @classmethod
     def poll(self, context):
-        return context.active_object and context.active_object.type in {'MESH', 'LATTICE', 'CURVE', 'SURFACE'}
+        return context.active_object and context.active_object.type == 'MESH'
 
     def draw(self, context):
         obj = context.active_object
 
+        def get_msg(o):
+            if len(obj.material_slots) == 0:
+                return "Add materials."
+            mat = obj.material_slots[obj.active_material_index].material
+            if not mat:
+                return "Select a filled material slot."
+            if not mat.use_nodes:
+                return "Material not using nodes."
+            if not mat.use_nodes:
+                return "Material not using nodes."
+            if not mat.node_tree.nodes.active.type != 'TEX_IMAGE':
+                return "Select a texture node."
+            return "yo"
+        msg = get_msg()
+        
+
         layout = self.layout
         col = layout.column(align=True)
         row = col.row()
-        col.separator()
+        row.label(text=msg)
+        #col.separator()
 
         #row.prop(animall_properties, "key_tilt")
         #row.operator("anim.insert_keyframe_animall", icon="KEY_HLT")
