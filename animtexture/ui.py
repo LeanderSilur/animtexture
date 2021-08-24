@@ -14,7 +14,7 @@ from bpy.props import (
         )
 
         
-class VIEW3D_PT_animall(Panel):
+class VIEW3D_PT_animtexture(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Animate"
@@ -39,11 +39,14 @@ class VIEW3D_PT_animall(Panel):
         row.label(text=msg)
         #col.separator()
 
+        # row.prop(context.window_manager.animtexture_properties, "test")
         row.prop(tex.animtexture, "dimensions")
+        row.prop(tex.animtexture, "id")
         row = col.row()
         row.prop(tex, "animtexturekey")
         row = col.row()
-        row.operator("anim.insert_keyframe_animtexture", icon="KEY_HLT")
+        row.operator("anim.animtexture_insert", icon="KEY_HLT")
+        row.operator("anim.animtexture_save", icon="FILE")
 
 
 
@@ -54,11 +57,13 @@ class VIEW3D_PT_animall(Panel):
 
 # Define Panel classes for updating
 panels = [
-        VIEW3D_PT_animall
+        VIEW3D_PT_animtexture
         ]
 
+from bpy.app.handlers import persistent
+@persistent
 def update_panel(self, context):
-    message = "AnimAll: Updating Panel locations has failed"
+    message = "AnimTexture: Updating Panel locations has failed"
     try:
         for panel in panels:
             if "bl_rna" in panel.__dict__:

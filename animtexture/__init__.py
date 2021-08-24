@@ -23,7 +23,22 @@ bl_info = {
     "support": "TESTING",
 }
 
-import bpy
+
+from bpy.types import (
+    ShaderNodeTexImage,
+    WindowManager,
+    )
+from bpy.utils import (
+    register_class,
+    unregister_class,
+    )
+from bpy.props import (
+    RemoveProperty,
+    PointerProperty,
+    IntProperty,
+    CollectionProperty
+    )
+from bpy.app import handlers
 from . import ops
 from . import ui
 
@@ -32,36 +47,45 @@ from . import ui
 
 register_classes = [
     ops.AnimtextureProperties,
-    ops.ANIM_OT_insert_keyframe_animtexture,
+    ops.AnimtextureGlobalProperties,
+    ops.ANIM_OT_insert_animtexture,
+    ops.ANIM_OT_save_animtexture,
     ui.AnimtextureAddonPreferences,
-    ui.VIEW3D_PT_animall
-
+    ui.VIEW3D_PT_animtexture,
+    ops.ImgPropsTODO,
     ]
+
+
+
 def register():
-
     for cls in register_classes:
-        bpy.utils.register_class(cls)
+        register_class(cls)
         
-    bpy.types.ShaderNodeTexImage.animtexture = bpy.props.PointerProperty(type=ops.AnimtextureProperties)
-    bpy.types.ShaderNodeTexImage.animtexturekey = bpy.props.IntProperty("key")
-
+    # TODO Property in pointer property classes can be keyframed? Therefore
+    # we have to keep animtexturekey separately?
+    ShaderNodeTexImage.animtexture = PointerProperty(type=ops.AnimtextureProperties)
+    ShaderNodeTexImage.animtexturekey = IntProperty("key")
+    WindowManager.animtexture_properties = PointerProperty(type=ops.AnimtextureGlobalProperties)
+    # TODO Why can't we put this in a PropertyGroup
+    WindowManager.animtexture_collection = CollectionProperty(type=ops.ImgPropsTODO)
     
     # TODO is this really how you attach frame change handlers in addons?
-    bpy.app.handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
+    handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
 
 
 def unregister():
     # TODO same as with attaching, is this correct?
-    frame_change_pre = bpy.app.handlers.frame_change_pre
+    frame_change_pre = handlers.frame_change_pre
     for h in frame_change_pre:
         if h.__name__ == "animtexture_framechangehandler":
             frame_change_pre.remove(h)
 
-    bpy.props.RemoveProperty(bpy.types.ShaderNodeTexImage, attr="animtexture")
-    bpy.props.RemoveProperty(bpy.types.ShaderNodeTexImage, attr="animtexturekey")
-    del bpy.types.ShaderNodeTexImage.animtexture
-    del bpy.types.ShaderNodeTexImage.animtexturekey
+    RemoveProperty(ShaderNodeTexImage, attr="animtexture")
+    RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")
+    RemoveProperty(WindowManager, attr="animtexture_properties")
+    del ShaderNodeTexImage.animtexture
+    del ShaderNodeTexImage.animtexturekey
+    del WindowManager.animtexture_properties
 
     for cls in register_classes:
-        bpy.utils.unregister_class(cls)
-        
+        unregister_class(cls)
