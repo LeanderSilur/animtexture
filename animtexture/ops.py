@@ -170,84 +170,16 @@ class ANIM_OT_save_animtexture(Operator):
             indices.add(int(k.co.y))
 
         for i in indices:
-            asdfhjkl
-            path = "//animtexture/" + str(node.animtexture.id) + "/" + str(i) + ".png"
+            name = "AT" + str(node.animtexture.id) + "_" + str(i)
+            img = bpy.data.images.get(name)
+            if not img:
+                print("problem")
+            else:
+                path = "//animtexture/" + str(node.animtexture.id) + "/" + str(i).zfill(6) + ".png"
+                img.filepath_raw = path
+                img.file_format = 'PNG'
+                img.save()
 
-
-        # TODO request unique id for folder organization
-        id = "AT" + str(node.animtexture.id)
-        datapath = 'nodes["' + node.name + '"].animtexturekey'
-        crv = tree.animation_data.action.fcurves.find(datapath)
-        
-
-        if not crv:
-            return
-
-        image_number = int(crv.evaluate(context.scene.frame_current))
-        
-        name = "AT" + str(node.animtexture.id) + "_" + str(int(image_number))
-
-        img = bpy.data.images.get(name)
-
-        # TODO check?
-        node.image = img
-    
-
-        return {'FINISHED'}
-        # first registering
-        def register(context, node, registered):
-            if not registered:
-                nextid = context.window_manager.animtexture_properties.nextid
-                node.animtexture.id = nextid
-                nextid += 1
-                context.window_manager.animtexture_properties.nextid = nextid
-            return True
-        registered = False
-
-        # TODO checks?
-        mat = ob.material_slots[ob.active_material_index].material
-        tree = mat.node_tree
-
-        if node.animtexture.id == 0:
-            registered = register(context, node, registered)
-            
-        # TODO request unique id for folder organization
-
-        if not tree.animation_data:
-            tree.animation_data_create()
-        if not tree.animation_data.action:
-            # mat.name + node.name should be a file-unique identifier
-            # I'm scared, that we overwrite data-blocks otherwise. TODO
-            tree.animation_data.action = bpy.data.actions.new(mat.name + node.name)
-
-        datapath = 'nodes["' + node.name + '"].animtexturekey'
-        crv = tree.animation_data.action.fcurves.find(datapath)
-
-        if not crv:
-            registered = register(context, node, registered)
-            # create a new curve and insert new keyframes
-            crv = tree.animation_data.action.fcurves.new(datapath)
-        
-        y = -1
-        for pt in crv.keyframe_points:
-            y = max(y, pt.co.y)
-        y = int(y + 1)
-        
-        # TODO these hardcoded namings could clash with user names
-        # TODO 
-        name = "AT" + str(node.animtexture.id) + "_" + str(y)
-        img = bpy.data.images.get(name)
-        if img: bpy.data.images.remove(img)
-        img = bpy.data.images.new(name, *node.animtexture.dimensions, alpha=True)
-        img.use_fake_user = True
-        
-        # TODO save images
-        node.animtexturekey = y
-        tree.keyframe_insert(data_path=datapath)
-        crv.keyframe_points[-1].interpolation = 'CONSTANT'
-
-        # TODO update visual representation
-        node.image = img
         return {'FINISHED'}
 
 
