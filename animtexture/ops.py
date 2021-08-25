@@ -68,22 +68,9 @@ class ANIM_OT_insert_animtexture(Operator):
             self.report({'ERROR'}, "Select an Image Texture node.")
             return
         
-        # first registering
-        def register(context, node, registered):
-            if not registered:
-                nextid = context.window_manager.animtexture_properties.nextid
-                node.animtexture.id = nextid
-                nextid += 1
-                context.window_manager.animtexture_properties.nextid = nextid
-            return True
-        registered = False
-
         # TODO checks?
         mat = ob.material_slots[ob.active_material_index].material
         tree = mat.node_tree
-
-        if node.animtexture.id == 0:
-            registered = register(context, node, registered)
             
         # TODO request unique id for folder organization
 
@@ -98,7 +85,12 @@ class ANIM_OT_insert_animtexture(Operator):
         crv = tree.animation_data.action.fcurves.find(datapath)
 
         if not crv:
-            registered = register(context, node, registered)
+            # first registering
+            nextid = context.window_manager.animtexture_properties.nextid
+            node.animtexture.id = nextid
+            nextid += 1
+            context.window_manager.animtexture_properties.nextid = nextid
+
             # create a new curve and insert new keyframes
             crv = tree.animation_data.action.fcurves.new(datapath)
         
