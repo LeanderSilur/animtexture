@@ -1,4 +1,5 @@
 import bpy
+from bpy.app.handlers import persistent
 from bpy.types import (
     FCurve,
     Keyframe,
@@ -36,10 +37,10 @@ class AnimtextureProperties(PropertyGroup):
         description="x and y dimension of the images",
         default=(512, 512),
     )
-    location: StringProperty(
+    savepath: StringProperty(
         name="Save Location",   
         description="Path to folder, where the images should be saved.",
-        default="animtexture"
+        default=""
     )
 
 
@@ -77,6 +78,9 @@ class ANIM_OT_insert_animtexture(Operator):
             node.animtexture.id = nextid
             nextid += 1
             context.window_manager.animtexture_properties.nextid = nextid
+
+            # update the save path
+            node.animtexture.savepath = "//animtexture" + str(nextid)
 
             # create a new curve and insert new keyframes
             crv = tree.animation_data.action.fcurves.new(datapath)
@@ -127,6 +131,10 @@ class ANIM_OT_save_animtexture(Operator):
         indices = set()
         for k in crv.keyframe_points:
             indices.add(int(k.co.y))
+            
+        import os, pathlib
+        full_path = bpy.path.abspath(node.animtexture.savepath)
+        pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
 
         for i in indices:
             name = "AT" + str(node.animtexture.id) + "_" + str(i)
@@ -134,7 +142,7 @@ class ANIM_OT_save_animtexture(Operator):
             if not img:
                 print("problem")
             else:
-                path = "//animtexture/" + str(node.animtexture.id) + "/" + str(i).zfill(6) + ".png"
+                path = os.path.join(node.animtexture.savepath, str(i).zfill(6) + ".png")
                 img.filepath_raw = path
                 img.file_format = 'PNG'
                 img.save()
@@ -178,6 +186,7 @@ def get_keyframes_of_SNTI(node_tree) -> FCurveKeyframePoints:
 
 
 # switch the images on playback
+@persistent
 def animtexture_framechangehandler(scene):
     update_displayed_texture(bpy.context)
 
@@ -209,4 +218,16 @@ def update_displayed_texture(context):
 
     # TODO check?
     node.image = img
-    
+
+
+"""
+    make sure the image sequence is saved
+"""
+def animtexture_loadprehandler():
+    pass
+"""
+    make sure all the images are still there
+    provide options to find them and reconnect them
+"""
+def animtexture_loadposthandler():
+    pass

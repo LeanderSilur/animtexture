@@ -68,13 +68,19 @@ def register():
     
     # TODO is this really how you attach frame change handlers in addons?
     handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
+    handlers.load_post.append(ops.animtexture_loadposthandler)
+    
+    # TODO 
+    #handlers.load_pre.append(make sure the image sequence is saved)
 
 
 def unregister():
     # TODO same as with attaching, is this correct?
     frame_change_pre = handlers.frame_change_pre
     for h in frame_change_pre:
-        if h.__name__ == "animtexture_framechangehandler":
+        if h.__name__ in [
+                "animtexture_framechangehandler",
+                "animtexture_loadposthandler",]:
             frame_change_pre.remove(h)
 
     RemoveProperty(ShaderNodeTexImage, attr="animtexture")
@@ -86,3 +92,4 @@ def unregister():
 
     for cls in register_classes:
         unregister_class(cls)
+
