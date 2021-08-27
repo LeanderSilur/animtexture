@@ -1,7 +1,5 @@
 from . import ops
 import bpy
-AnimtextureProperties = ops.AnimtextureProperties
-get_active_ShaderNodeTexImage = ops.get_active_ShaderNodeTexImage
 
 from bpy.types import (
         Operator,
@@ -26,12 +24,13 @@ class VIEW3D_PT_animtexture(Panel):
         return context.active_object and context.active_object.type == 'MESH'
 
     def draw(self, context):
-        tex = get_active_ShaderNodeTexImage(context.active_object)
+        node_tree = ops.get_active_node_tree(context)
+        tex = ops.get_active_SNTI(node_tree)
 
         if not tex:
             msg = "Select an Image Texture node."
         else:
-            msg = ""
+            msg = "Okay"
 
         layout = self.layout
         col = layout.column(align=True)

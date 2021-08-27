@@ -2,6 +2,9 @@ import bpy
 from bpy.types import (
     FCurve,
     Keyframe,
+    FCurveKeyframePoints,
+    NODE_UL_interface_sockets,
+    NodeTree,
     PropertyGroup,
     Operator,
     ShaderNodeTexImage,
@@ -9,16 +12,6 @@ from bpy.types import (
 from bpy.props import (
     IntProperty, IntVectorProperty, StringProperty, CollectionProperty
     )
-
-"""Return an active ShaderNodeTexImage."""
-def get_active_ShaderNodeTexImage(ob) -> ShaderNodeTexImage:
-    if len(ob.material_slots) == 0: return
-    mat = ob.material_slots[ob.active_material_index].material
-    if not mat: return
-    if not mat.use_nodes: return
-    node = mat.node_tree.nodes.active
-    if not node or not node.type == 'TEX_IMAGE': return
-    return node
 
 
 """Properties attached to the Window Manager."""
@@ -49,6 +42,7 @@ class AnimtextureProperties(PropertyGroup):
         default="animtexture"
     )
 
+
 """Adds a new animtexture keyframe."""
 class ANIM_OT_insert_animtexture(Operator):
     bl_label = "Insert"
@@ -56,26 +50,23 @@ class ANIM_OT_insert_animtexture(Operator):
     bl_description = "Insert a Keyframe"
     bl_options = {'REGISTER', 'UNDO'}
     # https://devtalk.blender.org/t/addon-operators-and-undo-support/4271/13
+    
+    @classmethod
+    def poll(self, context):
+        # TODO speed?
+        node_tree = get_active_node_tree(context)
+        return get_active_SNTI(node_tree) != None
 
     def execute(self, context):
-        ob = context.active_object
-        node = get_active_ShaderNodeTexImage(ob)
-        if not node:
-            self.report({'ERROR'}, "Select an Image Texture node.")
-            return
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
         
-        # TODO checks?
-        mat = ob.material_slots[ob.active_material_index].material
-        tree = mat.node_tree
-            
-        # TODO request unique id for folder organization
-
         if not tree.animation_data:
             tree.animation_data_create()
         if not tree.animation_data.action:
-            # mat.name + node.name should be a file-unique identifier
-            # I'm scared, that we overwrite data-blocks otherwise. TODO
-            tree.animation_data.action = bpy.data.actions.new(mat.name + node.name)
+            # Since this action will be empty, the nextid will increment anyways
+            tree.animation_data.action = bpy.data.actions.new(
+                str(context.window_manager.animtexture_properties.nextid))
 
         datapath = 'nodes["' + node.name + '"].animtexturekey'
         crv = tree.animation_data.action.fcurves.find(datapath)
@@ -112,6 +103,7 @@ class ANIM_OT_insert_animtexture(Operator):
         node.image = img
         return {'FINISHED'}
 
+
 """Saves the animated texture images."""
 class ANIM_OT_save_animtexture(Operator):
     bl_label = "Save"
@@ -122,36 +114,15 @@ class ANIM_OT_save_animtexture(Operator):
     @classmethod
     def poll(self, context):
         # TODO speed?
-        ob = context.object
-        if len(ob.material_slots) == 0: return False
-        mat = ob.material_slots[ob.active_material_index].material
-        if not mat or not mat.use_nodes: return False
-        node = mat.node_tree.nodes.active
-        if not node or not node.type == 'TEX_IMAGE': return False
-
-        # TODO duplicate code
-        datapath = 'nodes["' + node.name + '"].animtexturekey'
-        if (    not mat.node_tree.animation_data
-                or not mat.node_tree.animation_data.action
-                or not mat.node_tree.animation_data.action.fcurves):
-            return False
-        
-        crv = mat.node_tree.animation_data.action.fcurves.find(datapath)
-        if not crv or not len(crv.keyframe_points):
-            return False
-        return True
+        node_tree = get_active_node_tree(context)
+        return get_keyframes_of_SNTI(node_tree) != None
 
     def execute(self, context):
-        ob = context.active_object
-        node = get_active_ShaderNodeTexImage(ob)
-        if not node:
-            self.report({'ERROR'}, "Select an Image Texture node.")
-            return
+        node_tree = get_active_node_tree(context)
+        node = get_active_SNTI(node_tree)
         
-        mat = ob.material_slots[ob.active_material_index].material
-        tree = mat.node_tree
         datapath = 'nodes["' + node.name + '"].animtexturekey'
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        crv = node_tree.animation_data.action.fcurves.find(datapath)
 
         indices = set()
         for k in crv.keyframe_points:
@@ -170,17 +141,54 @@ class ANIM_OT_save_animtexture(Operator):
 
         return {'FINISHED'}
 
+"""Returns the activate node tree which selected via the gui (or null)."""
+def get_active_node_tree(context) -> NodeTree:
+    ob = context.object
+    if len(ob.material_slots) == 0: return None
+    mat = ob.material_slots[ob.active_material_index].material
+    if not mat or not mat.use_nodes: return None
+    return mat.node_tree
+
+
+"""Returns the active ShaderNodeTexImage of the node_tree. Does also accept None as an input."""
+def get_active_SNTI(node_tree) -> ShaderNodeTexImage:
+    if (    not node_tree
+            or not node_tree.nodes.active
+            or not node_tree.nodes.active.type == 'TEX_IMAGE'):
+        return None
+    return node_tree.nodes.active
+
+
+"""Returns the keyframes of a SNTI. Does also accept None as an input."""
+def get_keyframes_of_SNTI(node_tree) -> FCurveKeyframePoints:
+    if (    not node_tree
+            or not node_tree.animation_data
+            or not node_tree.animation_data.action
+            or not node_tree.animation_data.action.fcurves):
+        return None
+    
+    node = node_tree.nodes.active
+    if not node or not node.type == 'TEX_IMAGE': return False
+
+    datapath = 'nodes["' + node.name + '"].animtexturekey'
+    crv = node_tree.animation_data.action.fcurves.find(datapath)
+    if crv and len(crv.keyframe_points):
+        return crv.keyframe_points
+    return None
+
 
 # switch the images on playback
 def animtexture_framechangehandler(scene):
     update_displayed_texture(bpy.context)
 
+"""
+    Update the displayed texture, based on the current frame and 
+    the selected ShaderNodeTexImage
+"""
 def update_displayed_texture(context):
-    ob = context.active_object
     # TODO speed?
-    node = get_active_ShaderNodeTexImage(ob)
-    mat = ob.material_slots[ob.active_material_index].material
-    tree = mat.node_tree
+    tree = get_active_node_tree(context)
+    node = get_active_SNTI(tree)
     
     if not tree.animation_data or not tree.animation_data.action:
         return
