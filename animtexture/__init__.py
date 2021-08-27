@@ -52,11 +52,12 @@ register_classes = [
     ops.ANIM_OT_save_animtexture,
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
-    ops.ImgPropsTODO,
     ]
 
 
 def register():
+    for cls in register_classes:
+        register_class(cls)
         
     # TODO Property in pointer property classes can be keyframed? Therefore
     # we have to keep animtexturekey separately?
@@ -67,11 +68,9 @@ def register():
     # TODO Why can't we put this in a PropertyGroup
     WindowManager.animtexture_collection = CollectionProperty(type=ops.ImgPropsTODO)
     
-    for cls in register_classes:
-        register_class(cls)
-
     # TODO is this really how you attach frame change handlers in addons?
     handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
+
 
 
 def unregister():

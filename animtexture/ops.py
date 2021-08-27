@@ -21,10 +21,6 @@ def get_active_ShaderNodeTexImage(ob) -> ShaderNodeTexImage:
     return node
 
 
-
-class ImgPropsTODO(PropertyGroup):
-    particle_material: IntProperty(name = "id")
-
 """Properties attached to the Window Manager."""
 class AnimtextureGlobalProperties(PropertyGroup):
     nextid: IntProperty(
