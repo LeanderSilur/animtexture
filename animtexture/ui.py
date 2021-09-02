@@ -39,8 +39,8 @@ class VIEW3D_PT_animtexture(Panel):
         #col.separator()
 
         row = col.row()
-        row.prop(tex.animtexture, "id", enabled=False)
-        row.prop(tex, "animtexturekey", enabled=False )
+        row.prop(tex.animtexture, "id")
+        row.prop(tex, "animtexturekey")
         row = col.row()
         row.prop(tex.animtexture, "dimensions")
         row = col.row()
