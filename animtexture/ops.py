@@ -4,7 +4,6 @@ from bpy.types import (
     FCurve,
     Keyframe,
     FCurveKeyframePoints,
-    NODE_UL_interface_sockets,
     NodeTree,
     PropertyGroup,
     Operator,
@@ -13,6 +12,9 @@ from bpy.types import (
 from bpy.props import (
     IntProperty, IntVectorProperty, StringProperty, CollectionProperty
     )
+import os
+import shutil
+import pathlib
 
 
 """Properties attached to the Window Manager."""
@@ -70,9 +72,10 @@ class ANIM_OT_insert_animtexture(Operator):
                 str(context.window_manager.animtexture_properties.nextid))
 
         datapath = 'nodes["' + node.name + '"].animtexturekey'
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        crv = tree.animation_data.action.fcurves.find(datapath) 
 
-        if not crv:
+        y = 0
+        if not crv or not len(crv.keyframe_points):
             # first registering
             nextid = context.window_manager.animtexture_properties.nextid
             node.animtexture.id = nextid
@@ -82,21 +85,47 @@ class ANIM_OT_insert_animtexture(Operator):
             # update the save path
             node.animtexture.savepath = "//animtexture" + str(nextid)
 
-            # create a new curve and insert new keyframes
-            crv = tree.animation_data.action.fcurves.new(datapath)
-        
-        y = -1
-        for pt in crv.keyframe_points:
-            y = max(y, pt.co.y)
-        y = int(y + 1)
-        
-        # TODO these hardcoded namings could clash with user names
-        # TODO 
-        name = "AT" + str(node.animtexture.id) + "_" + str(y)
-        img = bpy.data.images.get(name)
-        if img: bpy.data.images.remove(img)
-        img = bpy.data.images.new(name, *node.animtexture.dimensions, alpha=True)
-        img.use_fake_user = True
+            # create a new curve if necessary
+            
+            crv = tree.animation_data.action.fcurves.find(datapath)
+            if not crv:
+                crv = tree.animation_data.action.fcurves.new(datapath)
+
+            #make path
+            full_path = bpy.path.abspath(node.animtexture.savepath)
+            pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
+            print("make > ", full_path)
+
+
+            # TODO these hardcoded namings could clash with user names
+            # TODO 
+            name = "AT" + str(node.animtexture.id)
+            img = bpy.data.images.get(name)
+            if img: bpy.data.images.remove(img)
+            img = bpy.data.images.new(name, *node.animtexture.dimensions, alpha=True)
+            img.use_fake_user = True
+
+            path = os.path.join(node.animtexture.savepath, str(y).zfill(6) + ".png")
+            img.filepath_raw = path
+            img.file_format = 'PNG'
+            img.save()
+            
+            shutil.copyfile(bpy.path.abspath(path),
+                bpy.path.abspath(os.path.join(node.animtexture.savepath, "template.png")))
+
+            img.source = 'SEQUENCE'
+            img.filepath = path
+            node.image = img
+            node.image_user.frame_duration = context.scene.frame_end
+            node.image_user.use_auto_refresh = True
+        else:
+            for pt in crv.keyframe_points:
+                y = max(y, pt.co.y)
+            y = int(y + 1)
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(node.animtexture.savepath, "template.png")),
+                bpy.path.abspath(os.path.join(node.animtexture.savepath, str(y).zfill(6) + ".png"))
+                )
         
         # TODO save images
         node.animtexturekey = y
@@ -104,7 +133,9 @@ class ANIM_OT_insert_animtexture(Operator):
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
         # TODO update visual representation
-        node.image = img
+        frame_offset = y - context.scene.frame_current
+        node.image_user.frame_offset = frame_offset
+        update_display_texture_imageeditor(context, node.image, frame_offset)
         return {'FINISHED'}
 
 
@@ -121,32 +152,29 @@ class ANIM_OT_save_animtexture(Operator):
         node_tree = get_active_node_tree(context)
         return get_keyframes_of_SNTI(node_tree) != None
 
-    def execute(self, context):
+    def execute(self, context: bpy.context):
         node_tree = get_active_node_tree(context)
         node = get_active_SNTI(node_tree)
         
         datapath = 'nodes["' + node.name + '"].animtexturekey'
         crv = node_tree.animation_data.action.fcurves.find(datapath)
 
-        indices = set()
+        indices = dict()
         for k in crv.keyframe_points:
-            indices.add(int(k.co.y))
-            
-        import os, pathlib
-        full_path = bpy.path.abspath(node.animtexture.savepath)
-        pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
+            indices[int(k.co.y)] = int(k.co.x)
+        
+        for v in indices:
+            frame = indices[v]
+            context.scene.frame_set(frame)
+            context.view_layer.update()
+            node.image.filepath_raw = os.path.join(
+                node.animtexture.savepath,
+                str(v).zfill(6) + ".png")
+            node.image.save()
 
-        for i in indices:
-            name = "AT" + str(node.animtexture.id) + "_" + str(i)
-            img = bpy.data.images.get(name)
-            if not img:
-                print("problem")
-            else:
-                path = os.path.join(node.animtexture.savepath, str(i).zfill(6) + ".png")
-                img.filepath_raw = path
-                img.file_format = 'PNG'
-                img.save()
-
+        node.image.filepath_raw = os.path.join(
+            node.animtexture.savepath,
+            str(0).zfill(6) + ".png")
         return {'FINISHED'}
 
 """Returns the activate node tree which selected via the gui (or null)."""
@@ -202,8 +230,6 @@ def update_displayed_texture(context):
     if not tree.animation_data or not tree.animation_data.action:
         return
 
-    # TODO request unique id for folder organization
-    id = "AT" + str(node.animtexture.id)
     datapath = 'nodes["' + node.name + '"].animtexturekey'
     crv = tree.animation_data.action.fcurves.find(datapath)
 
@@ -211,14 +237,17 @@ def update_displayed_texture(context):
         return
 
     image_number = int(crv.evaluate(context.scene.frame_current))
-    
-    name = "AT" + str(node.animtexture.id) + "_" + str(int(image_number))
+    frame_offset = image_number - context.scene.frame_current
+    node.image_user.frame_offset = frame_offset
+    update_display_texture_imageeditor(context, node.image, frame_offset)
 
-    img = bpy.data.images.get(name)
 
-    # TODO check?
-    node.image = img
-
+def update_display_texture_imageeditor(context, image, offset):
+    for area in context.screen.areas:
+        if area.type != 'IMAGE_EDITOR':
+            continue
+        if area.spaces[0].image == image:
+            area.spaces[0].image_user.frame_offset = offset
 
 """
     make sure the image sequence is saved
