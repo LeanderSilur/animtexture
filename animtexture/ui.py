@@ -35,19 +35,28 @@ class VIEW3D_PT_animtexture(Panel):
         layout = self.layout
         col = layout.column(align=True)
         row = col.row()
-        row.label(text=msg)
+        row.label(text="" if tex else "Select an Image Texture node.")
         #col.separator()
 
         row = col.row()
-        row.prop(tex.animtexture, "id")
-        row.prop(tex, "animtexturekey")
-        row = col.row()
-        row.prop(tex.animtexture, "dimensions")
-        row = col.row()
-        row.prop(tex.animtexture, "savepath")
-        row = col.row()
-        row.operator("anim.animtexture_insert", icon="KEY_HLT")
-        row.operator("anim.animtexture_save", icon="FILE")
+        op = row.operator("anim.animtexture_save", text="Save All", icon="FILE")
+        op.save_all = True
+
+        if tex:
+            row = col.row()
+            row.prop(tex.animtexture, "id")
+            row.prop(tex, "animtexturekey")
+            row = col.row()
+            row.prop(tex.animtexture, "dimensions")
+            row = col.row()
+            op = row.operator("anim.animtexture_save", icon="FILE")
+            op.save_all = False
+
+            row = col.row()
+            row.prop(tex.animtexture, "savepath")
+            row = col.row()
+            row.operator("anim.animtexture_insert", icon="KEY_HLT")
+
 
 
 

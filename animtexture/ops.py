@@ -1,7 +1,9 @@
 import bpy
 from bpy.app.handlers import persistent
 from bpy.types import (
+    BlendDataImages,
     FCurve,
+    Image,
     Keyframe,
     FCurveKeyframePoints,
     NodeTree,
@@ -145,52 +147,65 @@ class ANIM_OT_save_animtexture(Operator):
     bl_idname = "anim.animtexture_save"
     bl_description = "Save the Keyframes"
     bl_options = {'REGISTER'}
+    # TODO saveAll functionality
+    save_all: bpy.props.BoolProperty(
+        name='Save All',
+        description='Save all AnimTexture-sequence which are active in nodes, even if the nodes are not selected.',
+        default=False
+        )
 
     def execute(self, context):
-        node_tree = get_active_node_tree(context)
-        node = get_active_SNTI(node_tree)
-        
-        if not node or not node.image or not node.image.source == 'SEQUENCE':
-            # TODO fix return type
+        images = []
+
+        if self.save_all:
+            images = [i for i in bpy.data.images if i.source == 'SEQUENCE']
+        else:
+            node_tree = get_active_node_tree(context)
+            node = get_active_SNTI(node_tree)
+            if node and node.image and node.image.source == 'SEQUENCE':
+                images = [node.image]
+
+        if not len(images):
             return {'FINISHED'}
 
-        
+        def save_img(images: BlendDataImages, context, area, errors):
+            override = context.copy()
+            override['area'] = area
+            for i in images:
+                if not os.path.exists(os.path.dirname(bpy.path.abspath(i.filepath))):
+                    errors.append(i)
+                    continue
+                area.spaces.active.image = i
+                bpy.ops.image.save_sequence(override)
+
         # Default to the current area, but look for an IMAGE_EDITOR
-        if context.area.type == 'IMAGE_EDITOR':
-            old_image = context.area.spaces.active.image
-            context.area.spaces.active.image = node.image
-            bpy.ops.image.save_sequence()
-            context.area.spaces.active.image = old_image
+        area = context.area
+        errors = []
+        for a in context.screen.areas:
+            if a.type == 'IMAGE_EDITOR':
+                area = a
+                break
+        if area.type == 'IMAGE_EDITOR':
+            # Other area is IMAGE_EDITOR.
+            old_image = area.spaces.active.image
+            save_img(images, context, area, errors)
+            area.spaces.active.image = old_image
         else:
-            area = context.area
-            for a in context.screen.areas:
-                if a.type == 'IMAGE_EDITOR':
-                    area = a
-                    break
-            if area.type == 'IMAGE_EDITOR':
-                old_image = area.spaces.active.image
-                area.spaces.active.image = node.image
+            # No area is IMAGE_EDITOR.
+            # setup and save state
+            old_type = context.area.type
+            area.type = 'IMAGE_EDITOR'
+            old_image = area.spaces.active.image
+            
+            save_img(images, context, area, errors)
 
-                override = context.copy()
-                override['area'] = area
-                bpy.ops.image.save_sequence(override)
-                
-                area.spaces.active.image = old_image
-            else:
-                # setup and save state
-                old_type = context.area.type
-                area.type = 'IMAGE_EDITOR'
-                old_image = area.spaces.active.image
-                area.spaces.active.image = node.image
-
-                override = context.copy()
-                override['area'] = area
-                bpy.ops.image.save_sequence(override)
-
-                # restore state
-                area.spaces.active.image = old_image
-                area.type = old_type
-
+            # restore state
+            area.spaces.active.image = old_image
+            area.type = old_type
+        if len(errors):
+            self.report({'WARNING'}, "Some files failed. Look in the console.")
+            for e in errors:
+                print(">", e.name)
         return {'FINISHED'}
 
 """Returns the activate node tree which selected via the gui (or null)."""
@@ -273,10 +288,13 @@ def update_display_texture_imageeditor(context, image, duration, offset):
     make sure the image sequence is saved
 """
 def animtexture_loadprehandler():
+
     pass
+
 """
-    make sure all the images are still there
+    make sure all the images are still there when we reopen a file
     provide options to find them and reconnect them
 """
 def animtexture_loadposthandler():
+    
     pass
