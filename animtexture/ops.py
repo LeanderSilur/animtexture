@@ -116,7 +116,6 @@ class ANIM_OT_insert_animtexture(Operator):
             img.source = 'SEQUENCE'
             img.filepath = path
             node.image = img
-            node.image_user.frame_duration = context.scene.frame_end
             node.image_user.use_auto_refresh = True
         else:
             for pt in crv.keyframe_points:
@@ -135,7 +134,8 @@ class ANIM_OT_insert_animtexture(Operator):
         # TODO update visual representation
         frame_offset = y - context.scene.frame_current
         node.image_user.frame_offset = frame_offset
-        update_display_texture_imageeditor(context, node.image, frame_offset)
+
+        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
         return {'FINISHED'}
 
 
@@ -146,35 +146,51 @@ class ANIM_OT_save_animtexture(Operator):
     bl_description = "Save the Keyframes"
     bl_options = {'REGISTER'}
 
-    @classmethod
-    def poll(self, context):
-        # TODO speed?
-        node_tree = get_active_node_tree(context)
-        return get_keyframes_of_SNTI(node_tree) != None
-
-    def execute(self, context: bpy.context):
+    def execute(self, context):
         node_tree = get_active_node_tree(context)
         node = get_active_SNTI(node_tree)
         
-        datapath = 'nodes["' + node.name + '"].animtexturekey'
-        crv = node_tree.animation_data.action.fcurves.find(datapath)
+        if not node or not node.image or not node.image.source == 'SEQUENCE':
+            # TODO fix return type
+            return {'FINISHED'}
 
-        indices = dict()
-        for k in crv.keyframe_points:
-            indices[int(k.co.y)] = int(k.co.x)
         
-        for v in indices:
-            frame = indices[v]
-            context.scene.frame_set(frame)
-            context.view_layer.update()
-            node.image.filepath_raw = os.path.join(
-                node.animtexture.savepath,
-                str(v).zfill(6) + ".png")
-            node.image.save()
+        # Default to the current area, but look for an IMAGE_EDITOR
+        if context.area.type == 'IMAGE_EDITOR':
+            old_image = context.area.spaces.active.image
+            context.area.spaces.active.image = node.image
+            bpy.ops.image.save_sequence()
+            context.area.spaces.active.image = old_image
+        else:
+            area = context.area
+            for a in context.screen.areas:
+                if a.type == 'IMAGE_EDITOR':
+                    area = a
+                    break
+            if area.type == 'IMAGE_EDITOR':
+                old_image = area.spaces.active.image
+                area.spaces.active.image = node.image
 
-        node.image.filepath_raw = os.path.join(
-            node.animtexture.savepath,
-            str(0).zfill(6) + ".png")
+                override = context.copy()
+                override['area'] = area
+                bpy.ops.image.save_sequence(override)
+                
+                area.spaces.active.image = old_image
+            else:
+                # setup and save state
+                old_type = context.area.type
+                area.type = 'IMAGE_EDITOR'
+                old_image = area.spaces.active.image
+                area.spaces.active.image = node.image
+
+                override = context.copy()
+                override['area'] = area
+                bpy.ops.image.save_sequence(override)
+
+                # restore state
+                area.spaces.active.image = old_image
+                area.type = old_type
+
         return {'FINISHED'}
 
 """Returns the activate node tree which selected via the gui (or null)."""
@@ -236,18 +252,22 @@ def update_displayed_texture(context):
     if not crv:
         return
 
-    image_number = int(crv.evaluate(context.scene.frame_current))
-    frame_offset = image_number - context.scene.frame_current
+    frame = context.scene.frame_current
+    image_number = int(crv.evaluate(frame))
+    frame_offset = image_number - frame
+    node.image_user.frame_duration = frame
     node.image_user.frame_offset = frame_offset
-    update_display_texture_imageeditor(context, node.image, frame_offset)
+    
+    update_display_texture_imageeditor(context, node.image, frame, frame_offset)
 
 
-def update_display_texture_imageeditor(context, image, offset):
+def update_display_texture_imageeditor(context, image, duration, offset):
     for area in context.screen.areas:
         if area.type != 'IMAGE_EDITOR':
             continue
-        if area.spaces[0].image == image:
-            area.spaces[0].image_user.frame_offset = offset
+        if area.spaces.active.image == image:
+            area.spaces.active.image_user.frame_duration = duration
+            area.spaces.active.image_user.frame_offset = offset
 
 """
     make sure the image sequence is saved
