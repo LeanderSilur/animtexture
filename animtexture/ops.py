@@ -207,6 +207,7 @@ class ANIM_OT_export_animtexture(Operator):
     bl_options = {'REGISTER'}
 
     directory: bpy.props.StringProperty(subtype="DIR_PATH")
+    fill_gaps: bpy.props.BoolProperty(name="Fill Gaps", default=True)
 
     @classmethod
     def poll(cls, context):
@@ -233,12 +234,20 @@ class ANIM_OT_export_animtexture(Operator):
         keys = {int(k.co.x):int(k.co.y) for k in keyframes}
 
         key = keys[min(keys.keys())]
-        for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
-            if frame in keys:
+        if self.fill_gaps:
+            for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+                if frame in keys:
+                    key = keys[frame]
+                path_in = os.path.join(dir, str(key).zfill(len(base)) + ext)
+                path_out = os.path.join(self.directory, str(frame).zfill(len(base)) + ext)
+                shutil.copyfile(path_in, path_out)
+        else:
+            for frame in keys:
                 key = keys[frame]
-            path_in = os.path.join(dir, str(key).zfill(len(base)) + ext)
-            path_out = os.path.join(self.directory, str(frame).zfill(len(base)) + ext)
-            shutil.copyfile(path_in, path_out)
+                path_in = os.path.join(dir, str(key).zfill(len(base)) + ext)
+                path_out = os.path.join(self.directory, str(frame).zfill(len(base)) + ext)
+                shutil.copyfile(path_in, path_out)
+
 
         return {'FINISHED'}
 
