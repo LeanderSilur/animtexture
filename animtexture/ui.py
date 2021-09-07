@@ -1,5 +1,6 @@
 from . import ops
 import bpy
+from bpy.app import handlers
 
 from bpy.types import (
         Operator,
@@ -8,6 +9,7 @@ from bpy.types import (
         )
 from bpy.props import (
         BoolProperty,
+        EnumProperty,
         StringProperty,
         )
 
@@ -27,35 +29,26 @@ class VIEW3D_PT_animtexture(Panel):
         node_tree = ops.get_active_node_tree(context)
         tex = ops.get_active_SNTI(node_tree)
 
-        if not tex:
-            msg = "Select an Image Texture node."
-        else:
-            msg = "Okay"
-
         layout = self.layout
         col = layout.column(align=True)
+        row = col.row()
+        op = row.operator("anim.animtexture_save", text="Save All", icon="FILE")
+        op.save_all = True
+        
         row = col.row()
         row.label(text="" if tex else "Select an Image Texture node.")
         #col.separator()
 
-        row = col.row()
-        op = row.operator("anim.animtexture_save", text="Save All", icon="FILE")
-        op.save_all = True
-
         if tex:
             row = col.row()
-            row.prop(tex.animtexture, "id")
             row.prop(tex, "animtexturekey")
-            row = col.row()
-            row.prop(tex.animtexture, "dimensions")
             row = col.row()
             op = row.operator("anim.animtexture_save", icon="FILE")
             op.save_all = False
+            row.operator("anim.animtexture_export", icon="KEY_HLT")
 
-            row = col.row()
-            row.prop(tex.animtexture, "savepath")
-            row = col.row()
-            row.operator("anim.animtexture_insert", icon="KEY_HLT")
+        row = col.row()
+        row.operator("anim.animtexture_insert", icon="KEY_HLT")
 
 
 
@@ -87,6 +80,22 @@ def update_panel(self, context):
         print("\n[{}]\n{}\n\nError:\n{}".format(__package__, message, e))
         pass
 
+@persistent
+def update_checklinks(self, context):
+    for h in handlers.load_post:
+        if h.__name__ == "animtexture_checklinks":
+            handlers.load_post.remove(h)
+    if context.preferences.addons[__package__].preferences.checklinks:
+        handlers.load_post.append(ops.animtexture_checklinks)
+
+@persistent
+def update_savewithfile(self, context):
+    if context.preferences.addons[__package__].preferences.savewithfile != 'DONT_SAVE':
+        handlers.save_pre.append(ops.animtexture_savewithfile)
+    else:
+        for h in handlers.save_pre:
+            if h.__name__ == "animtexture_savewithfile":
+                handlers.save_pre.remove(h)
 
 class AnimtextureAddonPreferences(AddonPreferences):
     # this must match the addon name, use '__package__'
@@ -99,6 +108,22 @@ class AnimtextureAddonPreferences(AddonPreferences):
         default="Animate",
         update=update_panel
     )
+    checklinks: BoolProperty(
+        name="Check for Missing Files",
+        description="Check for missing texture images when opening a file.",
+        default=False,
+        update=update_checklinks
+    )
+    savewithfile: EnumProperty(
+        name="Save unsaved AnimTexture sequences when saving the file.",
+        description="Give a warning, if we save a file with unsaved image sequences.",
+        items = [
+            ('DONT_SAVE', 'Don\'t Save', ''),
+            ('SAVE_ACTIVE', 'Save Active', 'Save the active and selected texture node only.'),
+            ('SAVE_ALL', 'Save All', 'Save all texture nodes of the whole file.')],
+        default='SAVE_ALL',
+        update=update_savewithfile
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -107,4 +132,8 @@ class AnimtextureAddonPreferences(AddonPreferences):
 
         col.label(text="Tab Category:")
         col.prop(self, "category", text="")
+        col = row.column()
+        col.prop(self, "checklinks")
+        col.prop(self, "savewithfile")
+
 

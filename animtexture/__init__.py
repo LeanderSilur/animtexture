@@ -24,6 +24,7 @@ bl_info = {
 }
 
 
+import bpy
 from bpy.types import (
     ShaderNodeTexImage,
     WindowManager,
@@ -46,8 +47,6 @@ from . import ui
 #auto_load.init()
 
 register_classes = [
-    ops.AnimtextureProperties,
-    ops.AnimtextureGlobalProperties,
     ops.ANIM_OT_insert_animtexture,
     ops.ANIM_OT_save_animtexture,
     ui.AnimtextureAddonPreferences,
@@ -61,34 +60,35 @@ def register():
         
     # TODO Property in pointer property classes can be keyframed? Therefore
     # we have to keep animtexturekey separately?
-    ShaderNodeTexImage.animtexture = PointerProperty(type=ops.AnimtextureProperties)
     """Key to keep track of the image to be displayed."""
     ShaderNodeTexImage.animtexturekey = IntProperty("key")
-    WindowManager.animtexture_properties = PointerProperty(type=ops.AnimtextureGlobalProperties)
     
     # TODO is this really how you attach frame change handlers in addons?
     handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
-    handlers.load_post.append(ops.animtexture_loadposthandler)
-    
-    # TODO 
-    #handlers.load_pre.append(make sure the image sequence is saved)
+
+    if bpy.context.preferences.addons[__package__].preferences.savewithfile != 'DONT_SAVE':
+        handlers.save_pre.append(ops.animtexture_savewithfile)
+    if bpy.context.preferences.addons[__package__].preferences.checklinks:
+        handlers.load_post.append(ops.animtexture_checklinks)
+
 
 
 def unregister():
     # TODO same as with attaching, is this correct?
-    frame_change_pre = handlers.frame_change_pre
-    for h in frame_change_pre:
+    for h in handlers.frame_change_pre:
         if h.__name__ in [
                 "animtexture_framechangehandler",
                 "animtexture_loadposthandler",]:
-            frame_change_pre.remove(h)
+            handlers.frame_change_pre.remove(h)
+    for h in handlers.save_pre:
+        if h.__name__ == "animtexture_savewithfile":
+            handlers.save_pre.remove(h)
+    for h in handlers.load_post:
+        if h.__name__ == "animtexture_checklinks":
+            handlers.load_post.remove(h)
 
-    RemoveProperty(ShaderNodeTexImage, attr="animtexture")
     RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")
-    RemoveProperty(WindowManager, attr="animtexture_properties")
-    del ShaderNodeTexImage.animtexture
     del ShaderNodeTexImage.animtexturekey
-    del WindowManager.animtexture_properties
 
     for cls in register_classes:
         unregister_class(cls)
