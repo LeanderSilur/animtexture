@@ -206,24 +206,40 @@ class ANIM_OT_export_animtexture(Operator):
     bl_description = "Export the animated texture"
     bl_options = {'REGISTER'}
 
-    dirpath: bpy.props.StringProperty(subtype="DIR_PATH")
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None
+        # TODO speed?
+        node_tree = get_active_node_tree(context)
+        return get_active_SNTI(node_tree) != None
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        node_tree = get_active_node_tree(context)
-        node = get_active_SNTI(node_tree)
-        if node and node.image and node.image.source == 'SEQUENCE':
-            images = [node.image]
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        if not node.image or node.image.source != 'SEQUENCE':
+            return {'CANCELLED'}
 
-        print ("Directorypath:", self.dirpath)
-        print ("Folder name:", os.path.dirname(self.dirpath))
+        fullpath = bpy.path.abspath(node.image.filepath)
+        dir = os.path.dirname(fullpath)
+        filename = os.path.basename(fullpath)
+        base, ext = os.path.splitext(filename)
+
+        keyframes = get_keyframes_of_SNTI(tree, node)
+        keys = {int(k.co.x):int(k.co.y) for k in keyframes}
+
+        key = keys[min(keys.keys())]
+        for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
+            if frame in keys:
+                key = keys[frame]
+            path_in = os.path.join(dir, str(key).zfill(len(base)) + ext)
+            path_out = os.path.join(self.directory, str(frame).zfill(len(base)) + ext)
+            shutil.copyfile(path_in, path_out)
+
         return {'FINISHED'}
 
 """Returns the activate node tree which selected via the gui (or null)."""

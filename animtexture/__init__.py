@@ -49,6 +49,7 @@ from . import ui
 register_classes = [
     ops.ANIM_OT_insert_animtexture,
     ops.ANIM_OT_save_animtexture,
+    ops.ANIM_OT_export_animtexture,
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
     ]

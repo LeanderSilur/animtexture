@@ -45,8 +45,8 @@ class VIEW3D_PT_animtexture(Panel):
             row = col.row()
             op = row.operator("anim.animtexture_save", icon="FILE")
             op.save_all = False
-            row.operator("anim.animtexture_export", icon="KEY_HLT")
-
+            row.operator("anim.animtexture_export", icon="EXPORT")
+            
         row = col.row()
         row.operator("anim.animtexture_insert", icon="KEY_HLT")
 
