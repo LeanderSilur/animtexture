@@ -65,7 +65,8 @@ def register():
     ShaderNodeTexImage.animtexturekey = IntProperty("key")
     
     # TODO is this really how you attach frame change handlers in addons?
-    handlers.frame_change_pre.append(ops.animtexture_framechangehandler)
+    handlers.frame_change_pre.append(ops.animtexture_updatetexturehandler)
+    handlers.load_post.append(ops.animtexture_updatetexturehandler)
 
     if bpy.context.preferences.addons[__package__].preferences.savewithfile != 'DONT_SAVE':
         handlers.save_pre.append(ops.animtexture_savewithfile)
@@ -75,15 +76,15 @@ def register():
 def unregister():
     # TODO same as with attaching, is this correct?
     for h in handlers.frame_change_pre:
-        if h.__name__ in [
-                "animtexture_framechangehandler",
-                "animtexture_loadposthandler",]:
+        if h.__name__ in ["animtexture_updatetexturehandler",
+                        "animtexture_loadposthandler",]:
             handlers.frame_change_pre.remove(h)
     for h in handlers.save_pre:
         if h.__name__ == "animtexture_savewithfile":
             handlers.save_pre.remove(h)
     for h in handlers.load_post:
-        if h.__name__ == "animtexture_checklinks":
+        if h.__name__ in ["animtexture_checklinks",
+                            "animtexture_updatetexturehandler"]:
             handlers.load_post.remove(h)
 
     RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")

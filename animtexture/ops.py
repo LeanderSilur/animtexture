@@ -352,15 +352,15 @@ def get_keyframes_of_SNTI(node_tree, node) -> FCurveKeyframePoints:
 
 # switch the images on playback
 @persistent
-def animtexture_framechangehandler(scene):
-    update_displayed_texture(bpy.context)
+def animtexture_updatetexturehandler(scene):
+    udpate_texture(bpy.context)
 
 
 """
     Update the displayed texture, based on the current frame and 
     the selected ShaderNodeTexImage
 """
-def update_displayed_texture(context):
+def udpate_texture(context):
     # TODO speed?
     tree = get_active_node_tree(context)
     node = get_active_SNTI(tree)
