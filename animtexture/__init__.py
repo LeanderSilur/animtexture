@@ -44,6 +44,7 @@ from bpy.props import (
 from bpy.app import handlers
 from . import ops
 from . import ui
+from .keymaps import setup_keymaps
 
 #from . import auto_load
 #auto_load.init()
@@ -56,7 +57,7 @@ register_classes = [
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
     ]
-
+addon_keymaps = []
 
 def register():
     for cls in register_classes:
@@ -77,7 +78,17 @@ def register():
     if bpy.context.preferences.addons[__package__].preferences.checklinks:
         handlers.load_post.append(ops.animtexture_checklinks)
 
+    # keymaps
+    wm = bpy.context.window_manager
+    kc = wm.keyconfigs.addon
+    if kc:
+        setup_keymaps(wm, addon_keymaps)
+
 def unregister():
+    for km, kmi in addon_keymaps:
+        km.keymap_items.remove(kmi)
+    addon_keymaps.clear()
+
     # TODO same as with attaching, is this correct?
     for h in handlers.frame_change_pre:
         if h.__name__ in ["animtexture_updatetexturehandler",
