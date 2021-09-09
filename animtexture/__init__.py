@@ -13,14 +13,16 @@
 
 bl_info = {
     "name" : "animtexture",
-    "author" : "Leander, Richard",
     "description" : "",
-    "blender" : (2, 90, 0),
+    "author" : "Arun Leander, Richard",
+    "blender" : (2, 92, 0),
     "version" : (0, 0, 1),
-    "location" : "",
+    "location" : "View3D > Properties",
     "warning" : "",
-    "category" : "Generic",
     "support": "TESTING",
+    "doc_url": "https://github.com/LeanderSilur/animtexture/blob/main/README.md",
+    "tracker_url": "https://github.com/LeanderSilur/animtexture/issues",
+    "category" : "Animation",
 }
 
 
@@ -48,6 +50,7 @@ from . import ui
 
 register_classes = [
     ops.ANIM_OT_insert_animtexture,
+    ops.ANIM_OT_duplicate_animtexture,
     ops.ANIM_OT_save_animtexture,
     ops.ANIM_OT_export_animtexture,
     ui.AnimtextureAddonPreferences,
