@@ -197,8 +197,7 @@ class ANIM_OT_save_animtexture(Operator):
         def save_images(images: List[Img], context, area, errors):
             override = context.copy()
             override['area'] = area
-            REORDER = context.preferences.addons[__package__].preferences.reorderOnSave
-            DELETE = context.preferences.addons[__package__].preferences.deleteOnSave
+            REORGANIZE = context.preferences.addons[__package__].preferences.reorganizeOnSave
 
             for img in images:
                 i = img.image
@@ -214,13 +213,12 @@ class ANIM_OT_save_animtexture(Operator):
                 names = [str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
                 names.append("template" + ext)
 
-                # Delete unused - left over - images.
-                if DELETE:
+                # Delete unused - left over - images. TODO Reorder sequence.
+                if REORGANIZE:
                     for file in os.listdir(dir):
                         if file in names:
                             continue
                         os.remove(os.path.join(dir, file))
-                # TODO SORTING HAPPENS here
                 
 
         # Default to the current area, but look for an IMAGE_EDITOR

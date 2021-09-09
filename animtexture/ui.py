@@ -122,14 +122,9 @@ class AnimtextureAddonPreferences(AddonPreferences):
         default='SAVE_ALL',
         update=update_savewithfile
     )
-    reorderOnSave: BoolProperty(
-        name="Reorder",
-        description="Reorder the image file names when we save the animtexture sequence.",
-        default=False
-    )
-    deleteOnSave: BoolProperty(
-        name="Delete Unused",
-        description="Deleted unused image files when we save the animtexture sequence.",
+    reorganizeOnSave: BoolProperty(
+        name="Reorganize",
+        description="Deleted unused image files and rename their indices when we save the animtexture sequence.",
         default=False
     )
 
@@ -142,10 +137,8 @@ class AnimtextureAddonPreferences(AddonPreferences):
         col.prop(self, "category", text="")
         col = row.column()
         row1 = col.row()
-        row1.prop(self, "reorderOnSave")
-        row1.prop(self, "deleteOnSave")
+        row1.prop(self, "reorganizeOnSave")
 
         col.prop(self, "savewithfile")
         col.prop(self, "checklinks")
-
 
