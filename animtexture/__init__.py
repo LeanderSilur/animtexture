@@ -72,8 +72,6 @@ def register():
     if bpy.context.preferences.addons[__package__].preferences.checklinks:
         handlers.load_post.append(ops.animtexture_checklinks)
 
-
-
 def unregister():
     # TODO same as with attaching, is this correct?
     for h in handlers.frame_change_pre:

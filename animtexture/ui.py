@@ -51,8 +51,6 @@ class VIEW3D_PT_animtexture(Panel):
         row.operator("anim.animtexture_insert", icon="KEY_HLT")
 
 
-
-
 # Add-ons Preferences Update Panel
 #
 #    "name": "AnimAll",
@@ -124,6 +122,16 @@ class AnimtextureAddonPreferences(AddonPreferences):
         default='SAVE_ALL',
         update=update_savewithfile
     )
+    reorderOnSave: BoolProperty(
+        name="Reorder",
+        description="Reorder the image file names when we save the animtexture sequence.",
+        default=False
+    )
+    deleteOnSave: BoolProperty(
+        name="Delete Unused",
+        description="Deleted unused image files when we save the animtexture sequence.",
+        default=False
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -133,7 +141,11 @@ class AnimtextureAddonPreferences(AddonPreferences):
         col.label(text="Tab Category:")
         col.prop(self, "category", text="")
         col = row.column()
-        col.prop(self, "checklinks")
+        row1 = col.row()
+        row1.prop(self, "reorderOnSave")
+        row1.prop(self, "deleteOnSave")
+
         col.prop(self, "savewithfile")
+        col.prop(self, "checklinks")
 
 
