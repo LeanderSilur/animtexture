@@ -104,7 +104,6 @@ class ANIM_OT_insert_animtexture(Operator):
         crv = self.crv
         datapath = self.datapath
         
-        y = 0
         if not len(crv.keyframe_points):
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
@@ -115,7 +114,7 @@ class ANIM_OT_insert_animtexture(Operator):
             print("make > ", full_path)
 
             ext = "." + str(self.filetype).split("_")[-1].lower()
-            path = os.path.join(self.directory, str(y).zfill(self.padding)
+            path = os.path.join(self.directory, str(0).zfill(self.padding)
                 +  ext)
             img.filepath_raw = path
             img.file_format = self.filetype
@@ -128,24 +127,23 @@ class ANIM_OT_insert_animtexture(Operator):
             img.filepath = path
             node.image = img
             node.image_user.use_auto_refresh = True
+            node.animtexturekeynext = 0
         else:
-            for pt in crv.keyframe_points:
-                y = max(y, pt.co.y)
-            y = int(y + 1)
             absfilepath = bpy.path.abspath(node.image.filepath)
             dir, padding, ext = get_sequence_file_info(absfilepath)
             
             shutil.copyfile(
                 bpy.path.abspath(os.path.join(dir, "template" + ext)),
-                bpy.path.abspath(os.path.join(dir, str(y).zfill(padding) + ext))
+                bpy.path.abspath(os.path.join(dir, str(node.animtexturekeynext).zfill(padding) + ext))
                 )
         
-        node.animtexturekey = y
+        node.animtexturekey = node.animtexturekeynext
+        node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
         # TODO update visual representation
-        frame_offset = y - context.scene.frame_current
+        frame_offset = node.animtexturekey - context.scene.frame_current
         node.image_user.frame_offset = frame_offset
 
         update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
@@ -182,7 +180,6 @@ class ANIM_OT_duplicate_animtexture(Operator):
             self.report({'ERROR'}, "The keyframes seem to be faulty. Check that their interpolation is set to CONSTANT. Also file this as a bug.")
             return {'CANCELLED'}
         y0 = key
-        y1 = max(key_values) + 1
 
         absfilepath = bpy.path.abspath(node.image.filepath)
         dir, padding, ext = get_sequence_file_info(absfilepath)
@@ -191,22 +188,24 @@ class ANIM_OT_duplicate_animtexture(Operator):
         image_editor, restore_image_editor = get_image_editor(context)
         override = context.copy()
         override['area'] = image_editor
+        print(image_editor)
+        print(image_editor.type)
         bpy.ops.image.save(override)
         restore_image_editor()
 
         # then duplicate it
         shutil.copyfile(
             bpy.path.abspath(os.path.join(dir, str(y0).zfill(padding) + ext)),
-            bpy.path.abspath(os.path.join(dir, str(y1).zfill(padding) + ext))
+            bpy.path.abspath(os.path.join(dir, str(node.animtexturekeynext).zfill(padding) + ext))
             )
-        print(y0, y1)
 
         # insert a new keyframe for the duplicated image
-        node.animtexturekey = y1
+        node.animtexturekey = node.animtexturekeynext
+        node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
-        frame_offset = y1 - context.scene.frame_current
+        frame_offset = node.animtexturekey - context.scene.frame_current
         node.image_user.frame_offset = frame_offset
 
         update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
@@ -353,9 +352,9 @@ class ANIM_OT_export_animtexture(Operator):
 def get_image_editor(context: Context):
     # Current area is IMAGE_EDITOR.
     if context.area.type =='IMAGE_EDITOR':
-        former_image = context.spaces.active.image
+        former_image = context.area.spaces.active.image
         def restore():
-            context.spaces.active.image = former_image
+            context.area.type.spaces.active.image = former_image
         return context.area, restore
     
     area = context.area

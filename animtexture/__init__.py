@@ -65,7 +65,8 @@ def register():
     # TODO Property in pointer property classes can be keyframed? Therefore
     # we have to keep animtexturekey separately?
     """Key to keep track of the image to be displayed."""
-    ShaderNodeTexImage.animtexturekey = IntProperty("key")
+    ShaderNodeTexImage.animtexturekey = IntProperty("key", default=0)
+    ShaderNodeTexImage.animtexturekeynext = IntProperty("key", default=0)
     
     # TODO is this really how you attach frame change handlers in addons?
     handlers.frame_change_pre.append(ops.animtexture_updatetexturehandler)
