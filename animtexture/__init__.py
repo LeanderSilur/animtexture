@@ -53,7 +53,9 @@ register_classes = [
     ops.ANIM_OT_insert_animtexture,
     ops.ANIM_OT_duplicate_animtexture,
     ops.ANIM_OT_save_animtexture,
+    ops.ANIM_OT_import_animtexture,
     ops.ANIM_OT_export_animtexture,
+    ops.ANIM_OT_openimage_animtexture,
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
     ]

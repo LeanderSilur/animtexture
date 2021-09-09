@@ -1,3 +1,5 @@
+from io import IncrementalNewlineDecoder
+import string
 import bpy
 from typing import List, Tuple
 from bpy.app.handlers import persistent
@@ -16,7 +18,7 @@ from bpy.types import (
     ShaderNodeTexImage,
     )
 from bpy.props import (
-    EnumProperty, IntProperty, IntVectorProperty, StringProperty, CollectionProperty
+    BoolProperty, EnumProperty, IntProperty, IntVectorProperty, StringProperty, CollectionProperty
     )
 import os
 import shutil
@@ -60,6 +62,19 @@ class ANIM_OT_insert_animtexture(Operator):
         size=2,
         default=(512, 512)
     )
+    rgba: EnumProperty(
+        name="Extension",
+        description="Filetype of the images.",
+        items = [
+            ('RGB', 'RGB', ''),
+            ('RGBA', 'RGBA', '')],
+        default='RGBA'
+    )
+    transparent: BoolProperty(
+        name= "Transparent by Default",
+        description="Newly created images are transparent in alpha by default.",
+        default=True
+    )
 
     @classmethod
     def poll(self, context):
@@ -70,18 +85,13 @@ class ANIM_OT_insert_animtexture(Operator):
     def invoke(self, context, event):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
-        if not tree.animation_data:
-            tree.animation_data_create()
-        if not tree.animation_data.action:
-            # Since this action will be empty, the nextid will increment anyways
-            suffix = 0
-            while bpy.data.actions.find("AT" + str(suffix)) > 0:
-                suffix += 1
-            tree.animation_data.action = bpy.data.actions.new("AT" + str(suffix))
+        attach_action_if_needed(tree)
+
         datapath = 'nodes["' + node.name + '"].animtexturekey'
         crv = tree.animation_data.action.fcurves.find(datapath)
         if not crv:
             crv = tree.animation_data.action.fcurves.new(datapath)
+        
         self.tree = tree
         self.node = node
         self.crv = crv
@@ -102,13 +112,19 @@ class ANIM_OT_insert_animtexture(Operator):
     def execute(self, context):
         tree = self.tree
         node = self.node
+        if not node.image or node.image.source != "SEQUENCE":
+            self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
+            return {'CANCELLED'}
         crv = self.crv
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
-            img = bpy.data.images.new(self.name, *self.dimensions, alpha=True)
+            img = bpy.data.images.new(self.name, *self.dimensions, alpha=self.rgba=='RGBA')
+            if self.rgba=='RGBA' and self.transparent:
+                buffer = [img.pixels[0] * 0] * len(img.pixels)
+                img.pixels.foreach_set(buffer)
 
             full_path = bpy.path.abspath(self.directory)
             pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
@@ -131,11 +147,11 @@ class ANIM_OT_insert_animtexture(Operator):
             node.animtexturekeynext = 0
         else:
             absfilepath = bpy.path.abspath(node.image.filepath)
-            dir, padding, ext = get_sequence_file_info(absfilepath)
+            dir, name, padding, ext = get_sequence_file_info(absfilepath)
             
             shutil.copyfile(
                 bpy.path.abspath(os.path.join(dir, "template" + ext)),
-                bpy.path.abspath(os.path.join(dir, str(node.animtexturekeynext).zfill(padding) + ext))
+                bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
                 )
         
         node.animtexturekey = node.animtexturekeynext
@@ -182,7 +198,7 @@ class ANIM_OT_duplicate_animtexture(Operator):
             return {'CANCELLED'}
 
         absfilepath = bpy.path.abspath(node.image.filepath)
-        dir, padding, ext = get_sequence_file_info(absfilepath)
+        dir, name, padding, ext = get_sequence_file_info(absfilepath)
 
         
         # save active image
@@ -199,8 +215,8 @@ class ANIM_OT_duplicate_animtexture(Operator):
 
         # then duplicate it
         shutil.copyfile(
-            bpy.path.abspath(os.path.join(dir, str(key).zfill(padding) + ext)),
-            bpy.path.abspath(os.path.join(dir, str(node.animtexturekeynext).zfill(padding) + ext))
+            bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
+            bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
             )
 
         # insert a new keyframe for the duplicated image
@@ -267,7 +283,7 @@ class ANIM_OT_save_animtexture(Operator):
                 i = img.image
                 
                 absfilepath = bpy.path.abspath(i.filepath)
-                dir, padding, ext = get_sequence_file_info(absfilepath)
+                dir, name, padding, ext = get_sequence_file_info(absfilepath)
                 if not os.path.exists(dir):
                     errors.append(i)
                     continue
@@ -276,7 +292,7 @@ class ANIM_OT_save_animtexture(Operator):
 
                 # Delete unused - left over - images. TODO Reorder sequence.
                 if REORGANIZE:
-                    names = [str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
+                    names = [name + str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
                     names.append("template" + ext)
                     for file in os.listdir(dir):
                         if file in names:
@@ -296,9 +312,101 @@ class ANIM_OT_save_animtexture(Operator):
 
 
 
+"""Imports an image sequence as an animtexture sequence."""
+class ANIM_OT_import_animtexture(Operator):
+    bl_label = "Import"
+    bl_idname = "anim.animtexture_import"
+    bl_description = "Import an image sequence"
+    bl_options = {'REGISTER'}
 
-"""Exports the animtexture sequence as an image sequence."""
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    stop_at_gaps: bpy.props.BoolProperty(name="Stop at Gaps", default=False)
+    use_rel_path: bpy.props.BoolProperty(name="Make Relative", default=True)
+
+    @classmethod
+    def poll(cls, context):
+        # TODO speed?
+        node_tree = get_active_node_tree(context)
+        return get_active_SNTI(node_tree) != None
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        
+        # get file info and files in directory
+        dir, name, padding, ext = get_sequence_file_info(self.filepath)
+        all_files = os.listdir(dir)
+        
+        # create template if necessary
+        if "template" + ext not in all_files:
+            tmp_img = bpy.data.images.load(self.filepath)
+            buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
+            tmp_img.pixels.foreach_set(buffer)
+            tmp_img.filepath_raw = os.path.join(dir, "template" + ext)
+            tmp_img.save()
+            bpy.data.images.remove(tmp_img)
+        
+        length = len(name) + padding + len(ext)
+        files = [f for f in all_files
+            if f.startswith(name)
+                and len(f) == length
+                and f[len(name):len(name) + padding].isdigit()
+                and f.endswith(ext)]
+        files.sort()
+
+        # get first image and remove doubles
+        from filecmp import cmp
+
+        a, b = len(name), len(name) + padding
+        get_index = lambda filename: int(filename[a:b])
+
+        img_a = os.path.basename(self.filepath)
+        start = files.index(img_a)
+        keys = [get_index(img_a)]
+        for i in range(start + 1, len(files)):
+            img_b = files[i]
+            if not cmp(os.path.join(dir, img_a), os.path.join(dir, img_b)):
+                keys.append(get_index(img_b))
+                img_a = img_b
+
+        # create/overwrite keyframes
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        attach_action_if_needed(tree)
+
+        datapath = 'nodes["' + node.name + '"].animtexturekey'
+        crv = tree.animation_data.action.fcurves.find(datapath)
+        if not crv:
+            crv = tree.animation_data.action.fcurves.new(datapath)
+
+        while len(crv.keyframe_points) > len(keys):
+            crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
+        if len(crv.keyframe_points) < len(keys):
+            crv.keyframe_points.add(len(keys) - len(crv.keyframe_points))
+        for pt, key in zip(crv.keyframe_points, keys):
+            pt.co.x = key
+            pt.co.y = key
+            pt.interpolation = 'CONSTANT'
+
+        node.animtexturekeynext = keys[-1] + 1
+
+        print(self.filepath)
+        # imageblock, assign image block, add offset, 
+        if self.use_rel_path and bpy.data.is_saved:
+            self.filepath = bpy.path.relpath(self.filepath)
+        
+        node.image = bpy.data.images.load(self.filepath)
+        node.image.source = 'SEQUENCE'
+        node.image_user.use_auto_refresh = True
+        udpate_texture(context)
+        
+        return {'FINISHED'}
+
+
 class ANIM_OT_export_animtexture(Operator):
+    """Exports the animtexture sequence as an image sequence."""
     bl_label = "Export"
     bl_idname = "anim.animtexture_export"
     bl_description = "Export the animated texture"
@@ -349,8 +457,37 @@ class ANIM_OT_export_animtexture(Operator):
         return {'FINISHED'}
 
 
-"""Get an image_editor area and a callback to restore it."""
+class ANIM_OT_openimage_animtexture(Operator):
+    """Looks for an active ShaderNodeTextureImage with an image sequence and opens it in a UV Editor."""
+    bl_label = "Open in Editor"
+    bl_idname = "anim.animtexture_openimage"
+    bl_description = "Show the active texture in the image editor."
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        # TODO speed?
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        return node and node.image and node.image.source == 'SEQUENCE'
+
+    def execute(self, context):
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+            
+        for area in context.screen.areas:
+            if area.type in ['IMAGE_EDITOR', 'UV_EDITOR']:
+                area.spaces.active.image = node.image
+                area.spaces.active.image_user.frame_duration = node.image_user.frame_duration
+                area.spaces.active.image_user.frame_offset = node.image_user.frame_offset
+                return {'FINISHED'}
+
+        self.report({'WARNING'}, "Open an ImageEditor or UV Editor first.")
+        return {'CANCELLED'}
+
 def get_image_editor(context: Context):
+    """Get an image_editor area and a callback to restore it."""
+
     # Current area is IMAGE_EDITOR.
     if context.area.type =='IMAGE_EDITOR':
         former_image = context.area.spaces.active.image
@@ -384,13 +521,22 @@ def get_image_editor(context: Context):
         return area, restore
 
 
-"""Returns [directory: str, padding: int, extension:str] (ext - with a leading dot)."""
 def get_sequence_file_info(absfilepath: str) -> Tuple[str, int, str]:
+    """Returns: directory, name, padding, extension(with a leading dot)."""
     dir = os.path.dirname(absfilepath)
     name, ext = os.path.splitext(os.path.basename(absfilepath))
-    padding = len(name)
-    return dir, padding, ext
+    stripped_name = name.rstrip(string.digits)
+    return dir, stripped_name, len(name) - len(stripped_name), ext
 
+def attach_action_if_needed(tree:NodeTree):
+    """Create AnimationData and a new Action if required."""
+    if not tree.animation_data:
+        tree.animation_data_create()
+    if not tree.animation_data.action:
+        suffix = 0
+        while bpy.data.actions.find("AT" + str(suffix)) > 0:
+            suffix += 1
+        tree.animation_data.action = bpy.data.actions.new("AT" + str(suffix))
 
 """Returns the activate node tree which selected via the gui (or null)."""
 def get_active_node_tree(context) -> NodeTree:
@@ -440,6 +586,8 @@ def animtexture_updatetexturehandler(scene):
 """
 def udpate_texture(context):
     # TODO speed?
+    if not context.object:
+        return
     tree = get_active_node_tree(context)
     node = get_active_SNTI(tree)
     
@@ -455,10 +603,11 @@ def udpate_texture(context):
     frame = context.scene.frame_current
     image_number = int(crv.evaluate(frame))
     frame_offset = image_number - frame
-    node.image_user.frame_duration = frame
+    duration = max(frame, 1)
+    node.image_user.frame_duration = duration
     node.image_user.frame_offset = frame_offset
     
-    update_display_texture_imageeditor(context, node.image, frame, frame_offset)
+    update_display_texture_imageeditor(context, node.image, duration, frame_offset)
 
 
 def update_display_texture_imageeditor(context, image, duration, offset):
