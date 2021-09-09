@@ -10,6 +10,7 @@ from bpy.types import (
     Keyframe,
     FCurveKeyframePoints,
     NodeTree,
+    OverDropSequence,
     PropertyGroup,
     Operator,
     ShaderNodeTexImage,
@@ -27,7 +28,7 @@ import pathlib
 class ANIM_OT_insert_animtexture(Operator):
     bl_label = "Insert"
     bl_idname = "anim.animtexture_insert"
-    bl_description = "Insert a Keyframe"
+    bl_description = "Insert an Animtexture Keyframe for the active Texture Node"
     bl_options = {'REGISTER'}
     # https://devtalk.blender.org/t/addon-operators-and-undo-support/4271/13
 
@@ -154,7 +155,7 @@ class ANIM_OT_insert_animtexture(Operator):
 class ANIM_OT_duplicate_animtexture(Operator):
     bl_label = "Duplicate"
     bl_idname = "anim.animtexture_duplicate"
-    bl_description = "Duplicate a Keyframe"
+    bl_description = "Duplicate an Animtexture Keyframe for the active Texture Node"
     bl_options = {'REGISTER'}
 
     @classmethod
@@ -179,23 +180,26 @@ class ANIM_OT_duplicate_animtexture(Operator):
         if key not in key_values:
             self.report({'ERROR'}, "The keyframes seem to be faulty. Check that their interpolation is set to CONSTANT. Also file this as a bug.")
             return {'CANCELLED'}
-        y0 = key
 
         absfilepath = bpy.path.abspath(node.image.filepath)
         dir, padding, ext = get_sequence_file_info(absfilepath)
 
+        
         # save active image
         image_editor, restore_image_editor = get_image_editor(context)
         override = context.copy()
         override['area'] = image_editor
-        print(image_editor)
-        print(image_editor.type)
-        bpy.ops.image.save(override)
+
+        image_editor.spaces.active.image = node.image
+        image_editor.spaces.active.image_user.frame_duration = frame
+        image_editor.spaces.active.image_user.frame_offset = key - frame
+        context.scene.frame_set(frame)
+        res = bpy.ops.image.save(override)
         restore_image_editor()
 
         # then duplicate it
         shutil.copyfile(
-            bpy.path.abspath(os.path.join(dir, str(y0).zfill(padding) + ext)),
+            bpy.path.abspath(os.path.join(dir, str(key).zfill(padding) + ext)),
             bpy.path.abspath(os.path.join(dir, str(node.animtexturekeynext).zfill(padding) + ext))
             )
 
@@ -216,7 +220,7 @@ class ANIM_OT_duplicate_animtexture(Operator):
 class ANIM_OT_save_animtexture(Operator):
     bl_label = "Save"
     bl_idname = "anim.animtexture_save"
-    bl_description = "Save the Keyframes"
+    bl_description = "Save the Animtexture Keyframes"
     bl_options = {'REGISTER'}
     # TODO saveAll functionality
     save_all: bpy.props.BoolProperty(
@@ -254,9 +258,9 @@ class ANIM_OT_save_animtexture(Operator):
             return {'FINISHED'}
 
         # Save img objects in a list of List[Img].
-        def save_images(images: List[Img], context, area, errors):
+        def save_images(images: List[Img], context, image_editor, errors):
             override = context.copy()
-            override['area'] = area
+            override['area'] = image_editor
             REORGANIZE = context.preferences.addons[__package__].preferences.reorganizeOnSave
 
             for img in images:
@@ -267,7 +271,7 @@ class ANIM_OT_save_animtexture(Operator):
                 if not os.path.exists(dir):
                     errors.append(i)
                     continue
-                area.spaces.active.image = i
+                image_editor.spaces.active.image = i
                 bpy.ops.image.save_sequence(override)
 
                 # Delete unused - left over - images. TODO Reorder sequence.
@@ -278,14 +282,11 @@ class ANIM_OT_save_animtexture(Operator):
                         if file in names:
                             continue
                         os.remove(os.path.join(dir, file))
-                
-
-        # Default to the current area, but look for an IMAGE_EDITOR
 
         errors = []
-        graph_editor, reset_graph_editor = get_image_editor(context)
-        save_images(images, context, graph_editor, errors)
-        reset_graph_editor()
+        image_editor, restore_image_editor = get_image_editor(context)
+        save_images(images, context, image_editor, errors)
+        restore_image_editor()
         
         if len(errors):
             self.report({'WARNING'}, "Some files failed. Look in the console.")
@@ -354,7 +355,7 @@ def get_image_editor(context: Context):
     if context.area.type =='IMAGE_EDITOR':
         former_image = context.area.spaces.active.image
         def restore():
-            context.area.type.spaces.active.image = former_image
+            context.area.spaces.active.image = former_image
         return context.area, restore
     
     area = context.area
