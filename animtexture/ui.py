@@ -49,6 +49,7 @@ class VIEW3D_PT_animtexture(Panel):
             
         row = col.row()
         row.operator("anim.animtexture_insert", icon="KEY_HLT")
+        row.operator("anim.animtexture_duplicate", icon="KEY_HLT")
 
 
 # Add-ons Preferences Update Panel

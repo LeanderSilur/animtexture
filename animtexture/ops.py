@@ -4,6 +4,7 @@ from bpy.app.handlers import persistent
 from bpy.ops import image
 from bpy.types import (
     BlendDataImages,
+    Context,
     FCurve,
     Image,
     Keyframe,
@@ -139,13 +140,73 @@ class ANIM_OT_insert_animtexture(Operator):
                 bpy.path.abspath(os.path.join(dir, str(y).zfill(padding) + ext))
                 )
         
-        # TODO save images
         node.animtexturekey = y
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
         # TODO update visual representation
         frame_offset = y - context.scene.frame_current
+        node.image_user.frame_offset = frame_offset
+
+        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
+        return {'FINISHED'}
+
+
+"""Duplicates the current animtexture file and insert it as a new keyframes."""
+class ANIM_OT_duplicate_animtexture(Operator):
+    bl_label = "Duplicate"
+    bl_idname = "anim.animtexture_duplicate"
+    bl_description = "Duplicate a Keyframe"
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(self, context):
+        # TODO speed?
+        node_tree = get_active_node_tree(context)
+        node = get_active_SNTI(node_tree)
+        if not node: return False
+        keys = get_keyframes_of_SNTI(node_tree, node)
+        return len(keys) > 0
+
+    def execute(self, context):
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        
+        datapath = 'nodes["' + node.name + '"].animtexturekey'
+        crv = tree.animation_data.action.fcurves.find(datapath)
+        
+        frame = int(context.scene.frame_current)
+        key = int(crv.evaluate(frame))
+        key_values = [int(k.co.y) for k in crv.keyframe_points]
+        if key not in key_values:
+            self.report({'ERROR'}, "The keyframes seem to be faulty. Check that their interpolation is set to CONSTANT. Also file this as a bug.")
+            return {'CANCELLED'}
+        y0 = key
+        y1 = max(key_values) + 1
+
+        absfilepath = bpy.path.abspath(node.image.filepath)
+        dir, padding, ext = get_sequence_file_info(absfilepath)
+
+        # save active image
+        image_editor, restore_image_editor = get_image_editor(context)
+        override = context.copy()
+        override['area'] = image_editor
+        bpy.ops.image.save(override)
+        restore_image_editor()
+
+        # then duplicate it
+        shutil.copyfile(
+            bpy.path.abspath(os.path.join(dir, str(y0).zfill(padding) + ext)),
+            bpy.path.abspath(os.path.join(dir, str(y1).zfill(padding) + ext))
+            )
+        print(y0, y1)
+
+        # insert a new keyframe for the duplicated image
+        node.animtexturekey = y1
+        tree.keyframe_insert(data_path=datapath)
+        crv.keyframe_points[-1].interpolation = 'CONSTANT'
+
+        frame_offset = y1 - context.scene.frame_current
         node.image_user.frame_offset = frame_offset
 
         update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
@@ -210,11 +271,10 @@ class ANIM_OT_save_animtexture(Operator):
                 area.spaces.active.image = i
                 bpy.ops.image.save_sequence(override)
 
-                names = [str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
-                names.append("template" + ext)
-
                 # Delete unused - left over - images. TODO Reorder sequence.
                 if REORGANIZE:
+                    names = [str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
+                    names.append("template" + ext)
                     for file in os.listdir(dir):
                         if file in names:
                             continue
@@ -222,34 +282,19 @@ class ANIM_OT_save_animtexture(Operator):
                 
 
         # Default to the current area, but look for an IMAGE_EDITOR
-        area = context.area
-        errors = []
-        for a in context.screen.areas:
-            if a.type == 'IMAGE_EDITOR':
-                area = a
-                break
-        if area.type == 'IMAGE_EDITOR':
-            # Other area is IMAGE_EDITOR.
-            old_image = area.spaces.active.image
-            save_images(images, context, area, errors)
-            area.spaces.active.image = old_image
-        else:
-            # No area is IMAGE_EDITOR.
-            # setup and save state
-            old_type = context.area.type
-            area.type = 'IMAGE_EDITOR'
-            old_image = area.spaces.active.image
-            
-            save_images(images, context, area, errors)
 
-            # restore state
-            area.spaces.active.image = old_image
-            area.type = old_type
+        errors = []
+        graph_editor, reset_graph_editor = get_image_editor(context)
+        save_images(images, context, graph_editor, errors)
+        reset_graph_editor()
+        
         if len(errors):
             self.report({'WARNING'}, "Some files failed. Look in the console.")
             for e in errors:
                 print(">", e.name)
         return {'FINISHED'}
+
+
 
 
 """Exports the animtexture sequence as an image sequence."""
@@ -302,6 +347,41 @@ class ANIM_OT_export_animtexture(Operator):
                 shutil.copyfile(path_in, path_out)
 
         return {'FINISHED'}
+
+
+"""Get an image_editor area and a callback to restore it."""
+def get_image_editor(context: Context):
+    # Current area is IMAGE_EDITOR.
+    if context.area.type =='IMAGE_EDITOR':
+        former_image = context.spaces.active.image
+        def restore():
+            context.spaces.active.image = former_image
+        return context.area, restore
+    
+    area = context.area
+    for a in context.screen.areas:
+        if a.type == 'IMAGE_EDITOR':
+            area = a
+            break
+
+    if area.type == 'IMAGE_EDITOR':
+        # Other area is IMAGE_EDITOR.
+        former_image = area.spaces.active.image
+        area.spaces.active.image = former_image
+        def restore():
+            area.spaces.active.image = former_image
+        return area, restore
+    else:
+        # No area is IMAGE_EDITOR.
+        # setup and save state
+        former_type = context.area.type
+        area.type = 'IMAGE_EDITOR'
+        former_image = area.spaces.active.image
+        
+        def restore():
+            area.spaces.active.image = former_image
+            area.type = former_type
+        return area, restore
 
 
 """Returns [directory: str, padding: int, extension:str] (ext - with a leading dot)."""
