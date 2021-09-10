@@ -112,13 +112,11 @@ class ANIM_OT_insert_animtexture(Operator):
     def execute(self, context):
         tree = self.tree
         node = self.node
-        if not node.image or node.image.source != "SEQUENCE":
-            self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
-            return {'CANCELLED'}
         crv = self.crv
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
+
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
             img = bpy.data.images.new(self.name, *self.dimensions, alpha=self.rgba=='RGBA')
@@ -146,6 +144,10 @@ class ANIM_OT_insert_animtexture(Operator):
             node.image_user.use_auto_refresh = True
             node.animtexturekeynext = 0
         else:
+            if not node.image or node.image.source != "SEQUENCE":
+                self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
+                return {'CANCELLED'}
+                
             absfilepath = bpy.path.abspath(node.image.filepath)
             dir, name, padding, ext = get_sequence_file_info(absfilepath)
             
