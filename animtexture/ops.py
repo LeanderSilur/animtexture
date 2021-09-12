@@ -1,4 +1,3 @@
-from io import IncrementalNewlineDecoder
 import string
 import bpy
 from typing import List, Tuple
@@ -279,7 +278,6 @@ class ANIM_OT_save_animtexture(Operator):
         def save_images(images: List[Img], context, image_editor, errors):
             override = context.copy()
             override['area'] = image_editor
-            REORGANIZE = context.preferences.addons[__package__].preferences.reorganizeOnSave
 
             for img in images:
                 i = img.image
@@ -292,14 +290,9 @@ class ANIM_OT_save_animtexture(Operator):
                 image_editor.spaces.active.image = i
                 bpy.ops.image.save_sequence(override)
 
-                # Delete unused - left over - images. TODO Reorder sequence.
-                if REORGANIZE:
-                    names = [name + str(int(k.co.y)).zfill(padding) + ext for k in img.keyframes]
-                    names.append("template" + ext)
-                    for file in os.listdir(dir):
-                        if file in names:
-                            continue
-                        os.remove(os.path.join(dir, file))
+                # Delete unused - left over - images.
+                if context.preferences.addons[__package__].preferences.reorganizeOnSave:
+                    clean_directory(img.keyframes, absfilepath)
 
         errors = []
         image_editor, restore_image_editor = get_image_editor(context)
@@ -313,7 +306,6 @@ class ANIM_OT_save_animtexture(Operator):
         return {'FINISHED'}
 
 
-
 """Imports an image sequence as an animtexture sequence."""
 class ANIM_OT_import_animtexture(Operator):
     bl_label = "Import"
@@ -325,17 +317,16 @@ class ANIM_OT_import_animtexture(Operator):
     stop_at_gaps: bpy.props.BoolProperty(name="Stop at Gaps", default=False)
     use_rel_path: bpy.props.BoolProperty(name="Make Relative", default=True)
 
-    @classmethod
-    def poll(cls, context):
-        # TODO speed?
-        node_tree = get_active_node_tree(context)
-        return get_active_SNTI(node_tree) != None
-
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
+        tree = get_active_node_tree(context)
+        node =  get_active_SNTI(tree)
+        if not node:
+            self.report({'ERROR'}, "Select a ImageTexture node first.")
+            return {'CANCELLED'}
         
         # get file info and files in directory
         dir, name, padding, ext = get_sequence_file_info(self.filepath)
@@ -374,8 +365,6 @@ class ANIM_OT_import_animtexture(Operator):
                 img_a = img_b
 
         # create/overwrite keyframes
-        tree = get_active_node_tree(context)
-        node = get_active_SNTI(tree)
         attach_action_if_needed(tree)
 
         datapath = 'nodes["' + node.name + '"].animtexturekey'
@@ -407,6 +396,64 @@ class ANIM_OT_import_animtexture(Operator):
         return {'FINISHED'}
 
 
+"""Imports a single image into an animtexture sequence."""
+class ANIM_OT_import_single_animtexture(Operator):
+    bl_label = "Import Single"
+    bl_idname = "anim.animtexture_import_single"
+    bl_description = "Import a single image into an animtexture sequence"
+    bl_options = {'REGISTER'}
+
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+
+    @classmethod
+    def poll(self, context):
+        # TODO speed?
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        if not node: return False
+        keys = get_keyframes_of_SNTI(tree, node)
+        return len(keys) > 0
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+
+        # get file info and files in directory
+        dir, name, padding, ext1 = get_sequence_file_info(self.filepath)
+
+        absfilepath = bpy.path.abspath(node.image.filepath)
+        dir, name, padding, ext2 = get_sequence_file_info(absfilepath)
+
+        if ext1 != ext2:
+            self.report({'ERROR'}, "Wrong file extension.")
+            return {'CANCELLED'}
+        
+        # then duplicate it
+        shutil.copyfile(
+            bpy.path.abspath(self.filepath),
+            bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext2))
+            )
+
+        # insert a new keyframe for the duplicated image
+        datapath = 'nodes["' + node.name + '"].animtexturekey'
+        keyframe_points = get_keyframes_of_SNTI(tree, node)
+        node.animtexturekey = node.animtexturekeynext
+        node.animtexturekeynext += 1
+        tree.keyframe_insert(data_path=datapath)
+        keyframe_points[-1].interpolation = 'CONSTANT'
+
+        frame_offset = node.animtexturekey - context.scene.frame_current
+        node.image_user.frame_offset = frame_offset
+
+        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
+        
+        return {'FINISHED'}
+
+
 class ANIM_OT_export_animtexture(Operator):
     """Exports the animtexture sequence as an image sequence."""
     bl_label = "Export"
@@ -417,12 +464,6 @@ class ANIM_OT_export_animtexture(Operator):
     directory: bpy.props.StringProperty(subtype="DIR_PATH")
     fill_gaps: bpy.props.BoolProperty(name="Fill Gaps", default=True)
 
-    @classmethod
-    def poll(cls, context):
-        # TODO speed?
-        node_tree = get_active_node_tree(context)
-        return get_active_SNTI(node_tree) != None
-
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -431,6 +472,7 @@ class ANIM_OT_export_animtexture(Operator):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
         if not node.image or node.image.source != 'SEQUENCE':
+            self.report({'ERROR'}, "Select a ImageTexture node with animtexture sequence first.")
             return {'CANCELLED'}
 
         fullpath = bpy.path.abspath(node.image.filepath)
@@ -486,6 +528,50 @@ class ANIM_OT_openimage_animtexture(Operator):
 
         self.report({'WARNING'}, "Open an ImageEditor or UV Editor first.")
         return {'CANCELLED'}
+
+
+def clean_directory(keyframe_points, absfilepath):
+    """Removes all images except for the required images from the animtexture directory."""
+    dir, name, padding, ext = get_sequence_file_info(absfilepath)
+    key_values = [int(k.co.y) for k in keyframe_points]
+    def create_path(i):
+        return os.path.join(dir, name + str(i).zfill(padding) + ext)
+    required_files = [name + str(y).zfill(padding) + ext for y in key_values]
+    required_files.append("template" + ext)
+
+    for file in os.listdir(dir):
+        if file not in required_files:
+            os.remove(os.path.join(dir, file))
+            print(file)
+            
+    transfer = dict()
+    covered = []
+    i = 0
+    for k in keyframe_points:
+        v = int(k.co.y)
+        if v not in transfer:
+            transfer[v] = i
+            i += 1
+        k.co.y = transfer[v]
+        if transfer[v] == v:
+            del transfer[v]
+    
+    duplicate = []
+    for t in transfer:
+        v = transfer[t]
+        a = create_path(t)
+        b = create_path(v)
+        
+        if v in transfer:
+            b += "d"
+            duplicate.append(b)
+        os.rename(a, b)
+    for d in duplicate:
+        os.rename(d, d[:-1])
+        pass
+    return i
+
+
 
 def get_image_editor(context: Context):
     """Get an image_editor area and a callback to restore it."""

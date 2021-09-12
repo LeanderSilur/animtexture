@@ -32,15 +32,19 @@ class VIEW3D_PT_animtexture(Panel):
         layout = self.layout
         col = layout.column(align=True)
         row = col.row()
+        row.operator("anim.animtexture_import", icon="IMPORT")
+        row.operator("anim.animtexture_export", icon="EXPORT")
+        row = col.row()
         op = row.operator("anim.animtexture_save", icon="FILE")
         op.save_all = False
         op = row.operator("anim.animtexture_save", text="Save All", icon="FILE")
         op.save_all = True
         
-
         
         if not tex:
             col.row().label(text="Select an Image Texture node.")
+        else:
+            col.row().label(text="")
 
         if tex:
             # DEBUGGING
@@ -48,12 +52,13 @@ class VIEW3D_PT_animtexture(Panel):
                 row = col.row()
                 row.prop(tex, "animtexturekey")
                 row.prop(tex, "animtexturekeynext")
+
         row = col.row()
-        row.operator("anim.animtexture_openimage", icon="KEY_HLT")
-        row = col.row()
-        row.operator("anim.animtexture_import", icon="IMPORT")
-        row.operator("anim.animtexture_export", icon="EXPORT")
+        row.operator("anim.animtexture_openimage", icon="IMAGE")
             
+        row = col.row()
+        row.operator("anim.animtexture_import_single", icon="KEY_HLT")
+
         row = col.row()
         row.operator("anim.animtexture_insert", icon="KEY_HLT")
         row.operator("anim.animtexture_duplicate", icon="KEY_HLT")
