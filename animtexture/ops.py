@@ -46,7 +46,7 @@ class ANIM_OT_insert_animtexture(Operator):
         name="Extension",
         description="Filetype of the images.",
         items = [
-            ('JPG', '.jpg', ''),
+            ('JPEG', '.jpeg', ''),
             ('PNG', '.png', ''),
             ('OPEN_EXR', '.exr', '')],
         default='OPEN_EXR'
@@ -62,8 +62,8 @@ class ANIM_OT_insert_animtexture(Operator):
         default=(512, 512)
     )
     rgba: EnumProperty(
-        name="Extension",
-        description="Filetype of the images.",
+        name="Color Space",
+        description="Color Space of the Images.",
         items = [
             ('RGB', 'RGB', ''),
             ('RGBA', 'RGBA', '')],
