@@ -103,7 +103,8 @@ def unregister():
             handlers.save_pre.remove(h)
     for h in handlers.load_post:
         if h.__name__ in ["animtexture_checklinks",
-                            "animtexture_updatetexturehandler"]:
+                            "animtexture_updatetexturehandler",
+                            "animtexture_startupcheckhandler"]:
             handlers.load_post.remove(h)
 
     RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")

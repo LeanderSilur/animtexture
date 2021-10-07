@@ -147,8 +147,7 @@ class ANIM_OT_insert_animtexture(Operator):
                 self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
                 return {'CANCELLED'}
                 
-            absfilepath = bpy.path.abspath(node.image.filepath)
-            dir, name, padding, ext = get_sequence_file_info(absfilepath)
+            dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
             shutil.copyfile(
                 bpy.path.abspath(os.path.join(dir, "template" + ext)),
@@ -198,8 +197,7 @@ class ANIM_OT_duplicate_animtexture(Operator):
             self.report({'ERROR'}, "The keyframes seem to be faulty. Check that their interpolation is set to CONSTANT. Also file this as a bug.")
             return {'CANCELLED'}
 
-        absfilepath = bpy.path.abspath(node.image.filepath)
-        dir, name, padding, ext = get_sequence_file_info(absfilepath)
+        dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
 
         
         # save active image
@@ -283,7 +281,7 @@ class ANIM_OT_save_animtexture(Operator):
                 i = img.image
                 
                 absfilepath = bpy.path.abspath(i.filepath)
-                dir, name, padding, ext = get_sequence_file_info(absfilepath)
+                dir, name, padding, ext = get_sequence_path_info(absfilepath)
                 if not os.path.exists(dir):
                     errors.append(i)
                     continue
@@ -329,7 +327,7 @@ class ANIM_OT_import_animtexture(Operator):
             return {'CANCELLED'}
         
         # get file info and files in directory
-        dir, name, padding, ext = get_sequence_file_info(self.filepath)
+        dir, name, padding, ext = get_sequence_path_info(self.filepath)
         all_files = os.listdir(dir)
         
         # create template if necessary
@@ -423,10 +421,9 @@ class ANIM_OT_import_single_animtexture(Operator):
         node = get_active_SNTI(tree)
 
         # get file info and files in directory
-        dir, name, padding, ext1 = get_sequence_file_info(self.filepath)
+        dir, name, padding, ext1 = get_sequence_path_info(self.filepath)
 
-        absfilepath = bpy.path.abspath(node.image.filepath)
-        dir, name, padding, ext2 = get_sequence_file_info(absfilepath)
+        dir, name, padding, ext2 = get_sequence_path_info(node.image.filepath)
 
         if ext1 != ext2:
             self.report({'ERROR'}, "Wrong file extension.")
@@ -532,7 +529,7 @@ class ANIM_OT_openimage_animtexture(Operator):
 
 def clean_directory(keyframe_points, absfilepath):
     """Removes all images except for the required images from the animtexture directory."""
-    dir, name, padding, ext = get_sequence_file_info(absfilepath)
+    dir, name, padding, ext = get_sequence_path_info(absfilepath)
     key_values = [int(k.co.y) for k in keyframe_points]
     def create_path(i):
         return os.path.join(dir, name + str(i).zfill(padding) + ext)
@@ -609,8 +606,9 @@ def get_image_editor(context: Context):
         return area, restore
 
 
-def get_sequence_file_info(absfilepath: str) -> Tuple[str, int, str]:
+def get_sequence_path_info(path: str) -> Tuple[str, int, str]:
     """Returns: directory, name, padding, extension(with a leading dot)."""
+    absfilepath = bpy.path.abspath(path)
     dir = os.path.dirname(absfilepath)
     name, ext = os.path.splitext(os.path.basename(absfilepath))
     stripped_name = name.rstrip(string.digits)
@@ -644,8 +642,8 @@ def get_active_SNTI(node_tree) -> ShaderNodeTexImage:
     return node_tree.nodes.active
 
 
-"""Returns the keyframes of a SNTI. Does also accept None as an input."""
 def get_keyframes_of_SNTI(node_tree, node) -> FCurveKeyframePoints:
+    """Returns the keyframes of a SNTI (ShaderNodeTexImage). Does also accept None as an input."""
     if (    not node_tree
             or not node_tree.animation_data
             or not node_tree.animation_data.action
@@ -667,8 +665,40 @@ def get_keyframes_of_SNTI(node_tree, node) -> FCurveKeyframePoints:
 def animtexture_updatetexturehandler(scene):
     udpate_texture(bpy.context)
 
-def animtexture_startupcheckhandler():
-    startupcheck()
+@persistent
+def animtexture_startupcheckhandler(scene):
+
+    errors = {}
+    for mat in bpy.data.materials:
+        if (    not mat.use_nodes or
+                not mat.node_tree.animation_data or
+                not mat.node_tree.animation_data.action):
+            continue
+        for node in mat.node_tree.nodes:
+            keys = get_keyframes_of_SNTI(mat.node_tree, node)
+            if len(keys) == 0:
+                continue
+            if not node.image or node.image.source != 'SEQUENCE':
+                continue
+
+            dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
+            if os.path.exists(dir):
+                indices = [int(key.co.y) for key in keys]
+                existingfiles= os.listdir(dir)
+                for index in indices:
+                    filename = name + str(index).zfill(padding) + ext
+                    if not filename in existingfiles:
+                        if node.name not in errors:
+                            errors[node.name] = []
+                        errors[node.name].append(filename)
+    if len(errors):
+
+        def draw(self, context):
+            col = self.layout.column()
+            for nodename, imagenumbers in errors.items():
+                col.label(text=nodename + str(imagenumbers))
+
+        bpy.context.window_manager.popup_menu(draw, title = "Animtexture: There are files missing:", icon='ERROR')   
 
 
 """
@@ -708,22 +738,8 @@ def update_display_texture_imageeditor(context, image, duration, offset):
         if area.spaces.active.image == image:
             area.spaces.active.image_user.frame_duration = duration
             area.spaces.active.image_user.frame_offset = offset
+                    
 
-def startupcheck():
-    # problems = []
-    # for material in materials:
-    #     for node in material:
-    #         if node is ourtype and hasKeyframes():
-    #             paths = [construct paths]
-    #             for path in paths:
-    #                 if not exists(path):
-    #                     error.append(...)
-    # alert problems
-
-    errors = []
-    for bpy.
-
-    pass
 
 """
     make sure the image sequence is saved
