@@ -472,6 +472,7 @@ class ANIM_OT_export_animtexture(Operator):
             self.report({'ERROR'}, "Select a ImageTexture node with animtexture sequence first.")
             return {'CANCELLED'}
 
+        # TODO check if this function can be referenced
         fullpath = bpy.path.abspath(node.image.filepath)
         dir = os.path.dirname(fullpath)
         filename = os.path.basename(fullpath)
@@ -750,29 +751,3 @@ def animtexture_savewithfile(empty):
     context = bpy.context
     SAVE_ALL = context.preferences.addons[__package__].preferences.savewithfile == 'SAVE_ALL'
     bpy.ops.anim.animtexture_save(save_all=SAVE_ALL)
-
-"""
-    make sure all the images are still there when we reopen a file
-    provide options to find them and reconnect them
-"""
-@persistent
-def animtexture_checklinks(empty):
-    # TODO find more elegant solution
-    print("checking on open")
-    return
-    # TODO
-    context = bpy.context
-
-    sequence_nodes = []
-    for mat in bpy.data.materials:
-        if not mat.use_nodes:
-            continue
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE':
-                continue
-            if node.image and node.image.source == 'SEQUENCE':
-                sequence_nodes.append([mat.node_tree, node])
-    for tree, node in sequence_nodes:
-        keys = get_keyframes_of_SNTI(tree, node)
-        values = [k.co.y for k in keys]
-    
