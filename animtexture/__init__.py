@@ -75,6 +75,7 @@ def register():
     # TODO is this really how you attach frame change handlers in addons?
     handlers.frame_change_pre.append(ops.animtexture_updatetexturehandler)
     handlers.load_post.append(ops.animtexture_updatetexturehandler)
+    handlers.load_post.append(ops.animtexture_startupcheckhandler)
 
     if bpy.context.preferences.addons[__package__].preferences.savewithfile != 'DONT_SAVE':
         handlers.save_pre.append(ops.animtexture_savewithfile)

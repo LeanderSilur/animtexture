@@ -667,6 +667,9 @@ def get_keyframes_of_SNTI(node_tree, node) -> FCurveKeyframePoints:
 def animtexture_updatetexturehandler(scene):
     udpate_texture(bpy.context)
 
+def animtexture_startupcheckhandler():
+    startupcheck()
+
 
 """
     Update the displayed texture, based on the current frame and 
@@ -705,6 +708,22 @@ def update_display_texture_imageeditor(context, image, duration, offset):
         if area.spaces.active.image == image:
             area.spaces.active.image_user.frame_duration = duration
             area.spaces.active.image_user.frame_offset = offset
+
+def startupcheck():
+    # problems = []
+    # for material in materials:
+    #     for node in material:
+    #         if node is ourtype and hasKeyframes():
+    #             paths = [construct paths]
+    #             for path in paths:
+    #                 if not exists(path):
+    #                     error.append(...)
+    # alert problems
+
+    errors = []
+    for bpy.
+
+    pass
 
 """
     make sure the image sequence is saved
