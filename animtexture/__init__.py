@@ -93,19 +93,18 @@ def unregister():
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
 
-    # TODO same as with attaching, is this correct?
-    for h in handlers.frame_change_pre:
-        if h.__name__ in ["animtexture_updatetexturehandler",
-                        "animtexture_loadposthandler",]:
-            handlers.frame_change_pre.remove(h)
-    for h in handlers.save_pre:
-        if h.__name__ == "animtexture_savewithfile":
-            handlers.save_pre.remove(h)
-    for h in handlers.load_post:
-        if h.__name__ in ["animtexture_checklinks",
-                            "animtexture_updatetexturehandler",
-                            "animtexture_startupcheckhandler"]:
-            handlers.load_post.remove(h)
+    handlers = bpy.app.handlers
+
+    def handlerdetach(handlertype):
+
+        itemstodetach = [f for f in handlertype
+            if f.__module__ == "animtexture.ops"]
+        while itemstodetach:
+            handlertype.remove(itemstodetach.pop())
+
+    handlerdetach(handlers.frame_change_pre)
+    handlerdetach(handlers.save_pre)
+    handlerdetach(handlers.load_post)
 
     RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")
     del ShaderNodeTexImage.animtexturekey

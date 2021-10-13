@@ -10,6 +10,7 @@ from bpy.types import (
     Image,
     Keyframe,
     FCurveKeyframePoints,
+    Node,
     NodeTree,
     OverDropSequence,
     PropertyGroup,
@@ -118,7 +119,9 @@ class ANIM_OT_insert_animtexture(Operator):
 
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
-            img = bpy.data.images.new(self.name, *self.dimensions, alpha=self.rgba=='RGBA')
+            img = bpy.data.images.new(self.name,
+                                    *self.dimensions,
+                                    alpha=self.rgba=='RGBA')
             if self.rgba=='RGBA' and self.transparent:
                 buffer = [img.pixels[0] * 0] * len(img.pixels)
                 img.pixels.foreach_set(buffer)
@@ -149,10 +152,16 @@ class ANIM_OT_insert_animtexture(Operator):
                 
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
-            shutil.copyfile(
-                bpy.path.abspath(os.path.join(dir, "template" + ext)),
-                bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
-                )
+            try:
+                shutil.copyfile(
+                    bpy.path.abspath(os.path.join(dir, "template" + ext)),
+                    bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
+                    )
+            except OSError:
+                # TODO check what raised the error and give useful feedback
+                # (1) source file doesnt exist OR/AND (2) path not writable
+                # self.report()
+                return {'CANCELLED'}
         
         node.animtexturekey = node.animtexturekeynext
         node.animtexturekeynext += 1
@@ -634,8 +643,8 @@ def get_active_node_tree(context) -> NodeTree:
     return mat.node_tree
 
 
-"""Returns the active ShaderNodeTexImage of the node_tree. Does also accept None as an input."""
 def get_active_SNTI(node_tree) -> ShaderNodeTexImage:
+    """Returns the active ShaderNodeTexImage of the node_tree. Does also accept None as an input."""
     if (    not node_tree
             or not node_tree.nodes.active
             or not node_tree.nodes.active.type == 'TEX_IMAGE'):
@@ -643,7 +652,7 @@ def get_active_SNTI(node_tree) -> ShaderNodeTexImage:
     return node_tree.nodes.active
 
 
-def get_keyframes_of_SNTI(node_tree, node) -> FCurveKeyframePoints:
+def get_keyframes_of_SNTI(node_tree: NodeTree, node: Node) -> FCurveKeyframePoints:
     """Returns the keyframes of a SNTI (ShaderNodeTexImage). Does also accept None as an input."""
     if (    not node_tree
             or not node_tree.animation_data
@@ -693,7 +702,6 @@ def animtexture_startupcheckhandler(scene):
                             errors[node.name] = []
                         errors[node.name].append(filename)
     if len(errors):
-
         def draw(self, context):
             col = self.layout.column()
             for nodename, imagenumbers in errors.items():
