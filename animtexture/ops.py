@@ -26,8 +26,8 @@ import pathlib
 
 
 
-"""Adds a new animtexture keyframe."""
 class ANIM_OT_insert_animtexture(Operator):
+    """Adds a new animtexture keyframe."""
     bl_label = "Insert"
     bl_idname = "anim.animtexture_insert"
     bl_description = "Insert an Animtexture Keyframe for the active Texture Node"
@@ -176,8 +176,8 @@ class ANIM_OT_insert_animtexture(Operator):
         return {'FINISHED'}
 
 
-"""Duplicates the current animtexture file and insert it as a new keyframes."""
 class ANIM_OT_duplicate_animtexture(Operator):
+    """Duplicates the current animtexture file and insert it as a new keyframe."""
     bl_label = "Duplicate"
     bl_idname = "anim.animtexture_duplicate"
     bl_description = "Duplicate an Animtexture Keyframe for the active Texture Node"
