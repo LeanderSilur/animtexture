@@ -398,7 +398,7 @@ class ANIM_OT_import_animtexture(Operator):
         node.image = bpy.data.images.load(self.filepath)
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
-        udpate_texture(context)
+        update_texture(context)
         
         return {'FINISHED'}
 
@@ -642,6 +642,13 @@ def get_active_node_tree(context) -> NodeTree:
     if not mat or not mat.use_nodes: return None
     return mat.node_tree
 
+# TODO naming of duplicate function
+"""Returns the node tree of an object."""
+def get_node_tree(ob) -> NodeTree:
+    if len(ob.material_slots) == 0: return None
+    mat = ob.material_slots[ob.active_material_index].material
+    if not mat or not mat.use_nodes: return None
+    return mat.node_tree
 
 def get_active_SNTI(node_tree) -> ShaderNodeTexImage:
     """Returns the active ShaderNodeTexImage of the node_tree. Does also accept None as an input."""
@@ -668,12 +675,22 @@ def get_keyframes_of_SNTI(node_tree: NodeTree, node: Node) -> FCurveKeyframePoin
     if crv and len(crv.keyframe_points):
         return crv.keyframe_points
     return []
+#getter setter functions for animtexturekey to trigger updates, when animtexturekey is changed
+
+def animtexturekey_get(self):
+    return self["animtexturekey"]
+
+def animtexturekey_set(self, value):
+    if self["animtexturekey"] != value:
+        self["animtexturekey"] = value
+        udpate_texture_set(self, value)
+        
 
 
 # switch the images on playback
 @persistent
 def animtexture_updatetexturehandler(scene):
-    udpate_texture(bpy.context)
+    update_texture(bpy.context)
 
 @persistent
 def animtexture_startupcheckhandler(scene):
@@ -714,7 +731,7 @@ def animtexture_startupcheckhandler(scene):
     Update the displayed texture, based on the current frame and 
     the selected ShaderNodeTexImage
 """
-def udpate_texture(context):
+def update_texture(context):
     # TODO speed?
     if not context.object:
         return
@@ -739,6 +756,14 @@ def udpate_texture(context):
     
     update_display_texture_imageeditor(context, node.image, duration, frame_offset)
 
+def udpate_texture_set(node, image_number):
+    frame = bpy.context.scene.frame_current
+    frame_offset = image_number - frame
+    duration = max(frame, 1)
+    node.image_user.frame_duration = duration
+    node.image_user.frame_offset = frame_offset
+    
+    #update_display_texture_imageeditor(bpy.context, node.image, duration, frame_offset)
 
 def update_display_texture_imageeditor(context, image, duration, offset):
     for area in context.screen.areas:
