@@ -116,6 +116,8 @@ class ANIM_OT_insert_animtexture(Operator):
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
+            
+            
 
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
@@ -678,11 +680,11 @@ def get_keyframes_of_SNTI(node_tree: NodeTree, node: Node) -> FCurveKeyframePoin
 #getter setter functions for animtexturekey to trigger updates, when animtexturekey is changed
 
 def animtexturekey_get(self):
-    return self["animtexturekey"]
+    return self["XZUI"]
 
 def animtexturekey_set(self, value):
-    if self["animtexturekey"] != value:
-        self["animtexturekey"] = value
+    if self["XZUI"] != value:
+        self["XZUI"] = value
         udpate_texture_set(self, value)
         
 
