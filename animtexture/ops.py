@@ -169,7 +169,7 @@ class ANIM_OT_insert_animtexture(Operator):
         node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
-        
+
         return {'FINISHED'}
 
 
@@ -671,24 +671,12 @@ def animtexturekey_get(self):
 
 def animtexturekey_set(self, value):
     """Setter for SNTI attribute `animtexturekey`."""
-    print("set", self["ATK"], value)
     if "ATK" not in self or self["ATK"] != value:
         self["ATK"] = value
         udpate_texture_setter(self, value)
 
 
-# switch the images on playback
-@persistent
-def animtexture_framechangehandler(scene):
-    update_texture(bpy.context)
-
-@persistent
-def animtexture_updatetexturehandler(scene):
-    update_texture(bpy.context)
-
-@persistent
-def animtexture_startupcheckhandler(scene):
-
+def animtexture_startupcheckhandler():
     errors = {}
     for mat in bpy.data.materials:
         if (    not mat.use_nodes or
@@ -721,6 +709,17 @@ def animtexture_startupcheckhandler(scene):
         bpy.context.window_manager.popup_menu(draw, title = "Animtexture: There are files missing:", icon='ERROR')   
 
 
+@persistent
+def animtexture_framechange(scene):
+    update_texture(bpy.context)
+
+@persistent
+def animtexture_loadpost(scene):
+    animtexture_startupcheckhandler()
+    update_texture(bpy.context)
+    # Not working yet.
+    bpy.context.view_layer.update()
+
 def update_texture(context):
     """
     Update the displayed texture, based on the current frame and 
@@ -742,7 +741,7 @@ def update_texture(context):
         return
 
     frame = context.scene.frame_current
-    #image_number = int(crv.evaluate(frame))
+    image_number_0 = int(crv.evaluate(frame))
     image_number = node.animtexturekey
 
     frame_offset = image_number - frame
@@ -750,8 +749,6 @@ def update_texture(context):
     node.image_user.frame_duration = duration
     node.image_user.frame_offset = frame_offset
 
-    bpy.context.view_layer.update()
-    
     update_display_texture_imageeditor(node.image, duration, frame_offset)
 
 def udpate_texture_setter(node, image_number):
