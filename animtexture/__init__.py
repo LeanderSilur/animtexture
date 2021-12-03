@@ -76,7 +76,7 @@ def register():
     ShaderNodeTexImage.animtexturekeynext = IntProperty("key", default=0)
     
     # TODO is this really how you attach frame change handlers in addons?
-    handlers.frame_change_pre.append(ops.animtexture_updatetexturehandler)
+    handlers.frame_change_post.append(ops.animtexture_framechangehandler)
     handlers.load_post.append(ops.animtexture_updatetexturehandler)
     handlers.load_post.append(ops.animtexture_startupcheckhandler)
 

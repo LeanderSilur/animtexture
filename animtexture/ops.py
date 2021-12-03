@@ -169,12 +169,7 @@ class ANIM_OT_insert_animtexture(Operator):
         node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
-
-        # TODO update visual representation
-        frame_offset = node.animtexturekey - context.scene.frame_current
-        node.image_user.frame_offset = frame_offset
-
-        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
+        
         return {'FINISHED'}
 
 
@@ -235,10 +230,6 @@ class ANIM_OT_duplicate_animtexture(Operator):
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
-        frame_offset = node.animtexturekey - context.scene.frame_current
-        node.image_user.frame_offset = frame_offset
-
-        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
         return {'FINISHED'}
 
 
@@ -454,11 +445,6 @@ class ANIM_OT_import_single_animtexture(Operator):
         tree.keyframe_insert(data_path=datapath)
         keyframe_points[-1].interpolation = 'CONSTANT'
 
-        frame_offset = node.animtexturekey - context.scene.frame_current
-        node.image_user.frame_offset = frame_offset
-
-        update_display_texture_imageeditor(context, node.image, context.scene.frame_current, frame_offset)
-        
         return {'FINISHED'}
 
 
@@ -677,19 +663,25 @@ def get_keyframes_of_SNTI(node_tree: NodeTree, node: Node) -> FCurveKeyframePoin
     if crv and len(crv.keyframe_points):
         return crv.keyframe_points
     return []
-#getter setter functions for animtexturekey to trigger updates, when animtexturekey is changed
+
 
 def animtexturekey_get(self):
-    return self["XZUI"]
+    """Getter for SNTI attribute `animtexturekey`."""
+    return self["ATK"]
 
 def animtexturekey_set(self, value):
-    if self["XZUI"] != value:
-        self["XZUI"] = value
-        udpate_texture_set(self, value)
-        
+    """Setter for SNTI attribute `animtexturekey`."""
+    print("set", self["ATK"], value)
+    if "ATK" not in self or self["ATK"] != value:
+        self["ATK"] = value
+        udpate_texture_setter(self, value)
 
 
 # switch the images on playback
+@persistent
+def animtexture_framechangehandler(scene):
+    update_texture(bpy.context)
+
 @persistent
 def animtexture_updatetexturehandler(scene):
     update_texture(bpy.context)
@@ -729,11 +721,11 @@ def animtexture_startupcheckhandler(scene):
         bpy.context.window_manager.popup_menu(draw, title = "Animtexture: There are files missing:", icon='ERROR')   
 
 
-"""
+def update_texture(context):
+    """
     Update the displayed texture, based on the current frame and 
     the selected ShaderNodeTexImage
-"""
-def update_texture(context):
+    """
     # TODO speed?
     if not context.object:
         return
@@ -750,30 +742,35 @@ def update_texture(context):
         return
 
     frame = context.scene.frame_current
-    image_number = int(crv.evaluate(frame))
+    #image_number = int(crv.evaluate(frame))
+    image_number = node.animtexturekey
+
     frame_offset = image_number - frame
-    duration = max(frame, 1)
+    duration = max(frame + 1, 1)
     node.image_user.frame_duration = duration
     node.image_user.frame_offset = frame_offset
-    
-    update_display_texture_imageeditor(context, node.image, duration, frame_offset)
 
-def udpate_texture_set(node, image_number):
+    bpy.context.view_layer.update()
+    
+    update_display_texture_imageeditor(node.image, duration, frame_offset)
+
+def udpate_texture_setter(node, image_number):
     frame = bpy.context.scene.frame_current
     frame_offset = image_number - frame
     duration = max(frame, 1)
     node.image_user.frame_duration = duration
     node.image_user.frame_offset = frame_offset
     
-    #update_display_texture_imageeditor(bpy.context, node.image, duration, frame_offset)
+    update_display_texture_imageeditor(node.image, duration, frame_offset)
 
-def update_display_texture_imageeditor(context, image, duration, offset):
-    for area in context.screen.areas:
-        if area.type != 'IMAGE_EDITOR':
-            continue
-        if area.spaces.active.image == image:
-            area.spaces.active.image_user.frame_duration = duration
-            area.spaces.active.image_user.frame_offset = offset
+def update_display_texture_imageeditor(image, duration, offset):
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type != 'IMAGE_EDITOR':
+                continue
+            if area.spaces.active.image == image:
+                area.spaces.active.image_user.frame_duration = duration
+                area.spaces.active.image_user.frame_offset = offset
                     
 
 
