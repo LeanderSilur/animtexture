@@ -69,13 +69,15 @@ def register():
     # TODO Property in pointer property classes can be keyframed? Therefore
     # we have to keep animtexturekey separately?
     """Key to keep track of the image to be displayed."""
-    ShaderNodeTexImage.animtexturekey = IntProperty("key", default=0)
+    ShaderNodeTexImage.animtexturekey = IntProperty("key",
+        default=0,
+        get=ops.animtexturekey_get,
+        set=ops.animtexturekey_set)
     ShaderNodeTexImage.animtexturekeynext = IntProperty("key", default=0)
     
     # TODO is this really how you attach frame change handlers in addons?
-    handlers.frame_change_pre.append(ops.animtexture_updatetexturehandler)
-    handlers.load_post.append(ops.animtexture_updatetexturehandler)
-    handlers.load_post.append(ops.animtexture_startupcheckhandler)
+    handlers.frame_change_pre.append(ops.animtexture_framechange)
+    handlers.load_pre.append(ops.animtexture_loadpost)
 
     if bpy.context.preferences.addons[__package__].preferences.savewithfile != 'DONT_SAVE':
         handlers.save_pre.append(ops.animtexture_savewithfile)
@@ -95,19 +97,17 @@ def unregister():
 
     handlers = bpy.app.handlers
 
-    def handlerdetach(handlertype):
-
+    for handlertype in [
+            handlers.frame_change_pre, handlers.save_pre,
+            handlers.load_pre, handlers.load_post]:
         itemstodetach = [f for f in handlertype
             if f.__module__ == "animtexture.ops"]
         while itemstodetach:
             handlertype.remove(itemstodetach.pop())
 
-    handlerdetach(handlers.frame_change_pre)
-    handlerdetach(handlers.save_pre)
-    handlerdetach(handlers.load_post)
-
     RemoveProperty(ShaderNodeTexImage, attr="animtexturekey")
     del ShaderNodeTexImage.animtexturekey
+    del ShaderNodeTexImage.animtexturekeynext
 
     for cls in register_classes:
         unregister_class(cls)
