@@ -385,7 +385,7 @@ class ANIM_OT_import_animtexture(Operator):
         crv = tree.animation_data.action.fcurves.find(datapath)
         if not crv:
             crv = tree.animation_data.action.fcurves.new(datapath)
-
+        
         while len(crv.keyframe_points) > len(keys):
             crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
         if len(crv.keyframe_points) < len(keys):
@@ -397,7 +397,6 @@ class ANIM_OT_import_animtexture(Operator):
 
         node.animtexturekeynext = keys[-1] + 1
 
-        print(self.filepath)
         # imageblock, assign image block, add offset, 
         if self.use_rel_path and bpy.data.is_saved:
             self.filepath = bpy.path.relpath(self.filepath)
@@ -405,6 +404,8 @@ class ANIM_OT_import_animtexture(Operator):
         node.image = bpy.data.images.load(self.filepath)
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
+
+        node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
         update_texture(context)
         
         return {'FINISHED'}
@@ -756,7 +757,7 @@ def update_texture(context):
         return
 
     frame = context.scene.frame_current
-    image_number_0 = int(crv.evaluate(frame))
+    # image_number_0 = int(crv.evaluate(frame))
     image_number = node.animtexturekey
 
     frame_offset = image_number - frame
