@@ -137,15 +137,15 @@ class ANIM_OT_insert_animtexture(Operator):
             #     img.pixels.foreach_set(buffer)
             # else:
             
-            colorarray = [self.bg_color[0], self.bg_color[1], self.bg_color[2], self.bg_color[3]] * int(len(img.pixels) / 4)
-            img.pixels.foreach_set(colorarray)
+            colorlist = list(self.bg_color) * int(len(img.pixels) / 4)
+            img.pixels.foreach_set(colorlist)
 
             full_path = bpy.path.abspath(self.directory)
             pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
             print("make > ", full_path)
 
             ext = "." + str(self.filetype).split("_")[-1].lower()
-            path = os.path.join(self.directory, self.name + str(0).zfill(self.padding)
+            path = os.path.join(self.directory, self.name + "0" * self.padding
                 +  ext)
             img.filepath_raw = path
             img.file_format = self.filetype
@@ -543,7 +543,7 @@ def clean_directory(keyframe_points, absfilepath):
     dir, name, padding, ext = get_sequence_path_info(absfilepath)
     key_values = [int(k.co.y) for k in keyframe_points]
     def create_path(i):
-        return os.path.join(dir, name + "_" + str(i).zfill(padding) + ext)
+        return os.path.join(dir, name + str(i).zfill(padding) + ext)
     required_files = [name + str(y).zfill(padding) + ext for y in key_values]
     required_files.append(name + "template" + ext)
 
@@ -726,6 +726,7 @@ def animtexture_startupcheckhandler():
 @persistent
 def animtexture_framechange(scene):
     update_texture(bpy.context)
+    bpy.context.view_layer.update()
 
 @persistent
 def animtexture_loadpost(scene):
@@ -773,6 +774,7 @@ def udpate_texture_setter(node, image_number):
     node.image_user.frame_offset = frame_offset
     
     update_display_texture_imageeditor(node.image, duration, frame_offset)
+
 
 def update_display_texture_imageeditor(image, duration, offset):
     for screen in bpy.data.screens:
