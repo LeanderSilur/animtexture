@@ -319,7 +319,6 @@ class ANIM_OT_save_animtexture(Operator):
                 print(">", e.name)
         return {'FINISHED'}
 
-
 class ANIM_OT_import_animtexture(Operator):
     """Imports an image sequence as an animtexture sequence."""
     bl_label = "Import"
@@ -342,16 +341,111 @@ class ANIM_OT_import_animtexture(Operator):
             self.report({'ERROR'}, "Select a ImageTexture node first.")
             return {'CANCELLED'}
         
-        # get file info and files in directory
-        dir, name, padding, ext = get_sequence_path_info(self.filepath)
-        all_files = os.listdir(dir)
+        # # get file info and files in directory
+        # dir, name, padding, ext = get_sequence_path_info(self.filepath)
+        # all_files = os.listdir(dir)
 
         # create template if necessary
+        # if name + "template" + ext not in all_files:
+        #     tmp_img = bpy.data.images.load(self.filepath)
+        #     buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
+        #     tmp_img.pixels.foreach_set(buffer)
+        #     tmp_img.filepath_raw = os.path.join(dir, name + "template" + ext)
+        #     tmp_img.save()
+        #     bpy.data.images.remove(tmp_img)
+        
+        # length = len(name) + padding + len(ext)
+        # files = [f for f in all_files
+        #     if f.startswith(name)
+        #         and len(f) == length
+        #         and f[len(name):len(name) + padding].isdigit()
+        #         and f.endswith(ext)]
+        # files.sort()
+
+        # # get first image and remove doubles
+        # from filecmp import cmp
+
+        # a, b = len(name), len(name) + padding
+        # get_index = lambda filename: int(filename[a:b])
+
+        # img_a = os.path.basename(self.filepath)
+        # start = files.index(img_a)
+        # keys = [get_index(img_a)]
+        # for i in range(start + 1, len(files)):
+        #     img_b = files[i]
+        #     if not cmp(os.path.join(dir, img_a), os.path.join(dir, img_b)):
+        #         keys.append(get_index(img_b))
+        #         img_a = img_b
+
+        # # create/overwrite keyframes
+        # attach_action_if_needed(tree)
+
+        # datapath = 'nodes["' + node.name + '"].animtexturekey'
+        # crv = tree.animation_data.action.fcurves.find(datapath)
+        # if not crv:
+        #     crv = tree.animation_data.action.fcurves.new(datapath)
+        
+        # while len(crv.keyframe_points) > len(keys):
+        #     crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
+        # if len(crv.keyframe_points) < len(keys):
+        #     crv.keyframe_points.add(len(keys) - len(crv.keyframe_points))
+        # for pt, key in zip(crv.keyframe_points, keys):
+        #     pt.co.x = key
+        #     pt.co.y = key
+        #     pt.interpolation = 'CONSTANT'
+
+        # node.animtexturekeynext = keys[-1] + 1
+
+        # # imageblock, assign image block, add offset, 
+        # if self.use_rel_path and bpy.data.is_saved:
+        #     self.filepath = bpy.path.relpath(self.filepath)
+        
+        # node.image = bpy.data.images.load(self.filepath)
+        # node.image.source = 'SEQUENCE'
+        # node.image_user.use_auto_refresh = True
+
+        # node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
+        # update_texture(context)
+
+        bpy.ops.anim.animtexture_set_working_dir('INVOKE_DEFAULT', seq_filepath = self.filepath, stop_at_gaps = self.stop_at_gaps, use_rel_path = self.use_rel_path)
+
+        return {'FINISHED'}
+
+class ANIM_OT_import_set_working_directory(Operator):
+    """Set Directory as working directory for imported texture."""
+    bl_label = "Set Working Directory"
+    bl_idname = "anim.animtexture_set_working_dir"
+    bl_description = "Select a folder where working files of imported sequence stay"
+    bl_options = {'REGISTER'}
+
+    seq_filepath: bpy.props.StringProperty(
+        name="Sequence File Path",
+        description="The File Path of the sequence that will be imported"
+    )
+
+    stop_at_gaps: bpy.props.BoolProperty(name="Stop at Gaps")
+    use_rel_path: bpy.props.BoolProperty(name="Make Relative")
+
+    directory: bpy.props.StringProperty(
+        name="Import - Working directory Path",
+        description="Working directory Path for importing sequence"
+    )
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+
+        # get file info and files in directory
+        dir, name, padding, ext = get_sequence_path_info(self.seq_filepath)
+        all_files = os.listdir(dir)
+
         if name + "template" + ext not in all_files:
-            tmp_img = bpy.data.images.load(self.filepath)
+            tmp_img = bpy.data.images.load(self.seq_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
-            tmp_img.filepath_raw = os.path.join(dir, name + "template" + ext)
+            tmp_img.filepath_raw = os.path.join(self.directory, name + "template" + ext)
             tmp_img.save()
             bpy.data.images.remove(tmp_img)
         
@@ -361,6 +455,7 @@ class ANIM_OT_import_animtexture(Operator):
                 and len(f) == length
                 and f[len(name):len(name) + padding].isdigit()
                 and f.endswith(ext)]
+
         files.sort()
 
         # get first image and remove doubles
@@ -369,7 +464,7 @@ class ANIM_OT_import_animtexture(Operator):
         a, b = len(name), len(name) + padding
         get_index = lambda filename: int(filename[a:b])
 
-        img_a = os.path.basename(self.filepath)
+        img_a = os.path.basename(self.seq_filepath)
         start = files.index(img_a)
         keys = [get_index(img_a)]
         for i in range(start + 1, len(files)):
@@ -378,14 +473,24 @@ class ANIM_OT_import_animtexture(Operator):
                 keys.append(get_index(img_b))
                 img_a = img_b
 
+        #duplicate images into new working directory        
+        for key in keys:
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
+                bpy.path.abspath(os.path.join(self.directory, name + str(key).zfill(padding) + ext))
+                )
+
         # create/overwrite keyframes
+        tree = get_active_node_tree(context)
+        node =  get_active_SNTI(tree)
+
         attach_action_if_needed(tree)
 
         datapath = 'nodes["' + node.name + '"].animtexturekey'
         crv = tree.animation_data.action.fcurves.find(datapath)
         if not crv:
             crv = tree.animation_data.action.fcurves.new(datapath)
-        
+
         while len(crv.keyframe_points) > len(keys):
             crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
         if len(crv.keyframe_points) < len(keys):
@@ -397,18 +502,25 @@ class ANIM_OT_import_animtexture(Operator):
 
         node.animtexturekeynext = keys[-1] + 1
 
+        print(self.seq_filepath)
         # imageblock, assign image block, add offset, 
         if self.use_rel_path and bpy.data.is_saved:
-            self.filepath = bpy.path.relpath(self.filepath)
+            self.seq_filepath = bpy.path.relpath(self.seq_filepath)
         
-        node.image = bpy.data.images.load(self.filepath)
+        # set node image to image in new working directory
+        selected_image_name = os.path.basename(bpy.path.abspath(self.seq_filepath))
+        working_directory_path = bpy.path.abspath(os.path.join(self.directory, selected_image_name))
+
+        node.image = bpy.data.images.load(working_directory_path)
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
 
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
+
         update_texture(context)
-        
+
         return {'FINISHED'}
+
 class ANIM_OT_import_single_animtexture(Operator):
     """Imports a single image into an animtexture sequence."""
     bl_label = "Import Single"
@@ -459,7 +571,6 @@ class ANIM_OT_import_single_animtexture(Operator):
         keyframe_points[-1].interpolation = 'CONSTANT'
 
         return {'FINISHED'}
-
 
 class ANIM_OT_export_animtexture(Operator):
     """Exports the animtexture sequence as an image sequence."""

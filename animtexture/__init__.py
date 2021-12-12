@@ -54,6 +54,7 @@ register_classes = [
     ops.ANIM_OT_duplicate_animtexture,
     ops.ANIM_OT_save_animtexture,
     ops.ANIM_OT_import_animtexture,
+    ops.ANIM_OT_import_set_working_directory,
     ops.ANIM_OT_import_single_animtexture,
     ops.ANIM_OT_export_animtexture,
     ops.ANIM_OT_openimage_animtexture,
