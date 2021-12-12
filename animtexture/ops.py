@@ -128,7 +128,7 @@ class ANIM_OT_insert_animtexture(Operator):
         
         if not len(crv.keyframe_points):
             if len(self.name) and self.name[-1:].isdigit():
-                self.name += "_"ax
+                self.name += "_"
 
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
@@ -164,7 +164,7 @@ class ANIM_OT_insert_animtexture(Operator):
             node.animtexturekeynext = 0
         else:
             if not node.image or node.image.source != "SEQUENCE":
-                self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
+                self.report({'ERROR'}, MISSING_TEXTURE_ERROR)
                 return {'CANCELLED'}
                 
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
@@ -203,7 +203,8 @@ class ANIM_OT_duplicate_animtexture(Operator):
         node = get_active_SNTI(node_tree)
         if not node: return False
         keys = get_keyframes_of_SNTI(node_tree, node)
-        return len(keys) > 0
+        
+        return len(keys) > 0 and node.image and node.image.source == "SEQUENCE"
 
     def execute(self, context):
         tree = get_active_node_tree(context)
@@ -264,7 +265,9 @@ class ANIM_OT_save_animtexture(Operator):
 
     def execute(self, context):
         class Img():
-            def __init__(self, image: Image, keyframes: FCurveKeyframePoints) -> None:
+            def __init__(self,
+                    image: Image,
+                    keyframes: FCurveKeyframePoints) -> None:
                 self.image = image
                 self.keyframes = keyframes
         images = []
@@ -296,12 +299,15 @@ class ANIM_OT_save_animtexture(Operator):
             override['area'] = image_editor
 
             for img in images:
+                if not img.image or img.image.type != "SEQUENCE":
+                    errors.append("Missing")
+                    continue
+
                 i = img.image
-                
                 absfilepath = bpy.path.abspath(i.filepath)
                 dir, name, padding, ext = get_sequence_path_info(absfilepath)
                 if not os.path.exists(dir):
-                    errors.append(i)
+                    errors.append(i.name)
                     continue
                 image_editor.spaces.active.image = i
                 bpy.ops.image.save_sequence(override)
@@ -318,7 +324,7 @@ class ANIM_OT_save_animtexture(Operator):
         if len(errors):
             self.report({'WARNING'}, "Some files failed. Look in the console.")
             for e in errors:
-                print(">", e.name)
+                print(">", e)
         return {'FINISHED'}
 
 class ANIM_OT_import_animtexture(Operator):
@@ -476,7 +482,7 @@ class ANIM_OT_import_single_animtexture(Operator):
         node = get_active_SNTI(tree)
         if not node: return False
         keys = get_keyframes_of_SNTI(tree, node)
-        return len(keys) > 0
+        return len(keys) > 0 and node.image and node.image.source == "SEQUENCE"
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -523,15 +529,21 @@ class ANIM_OT_export_animtexture(Operator):
     include_template: bpy.props.BoolProperty(name="Include Template", default=True)
 
     def invoke(self, context, event):
+        tree = get_active_node_tree(context)
+        node = get_active_SNTI(tree)
+        if not node: 
+            return {'CANCELLED'}
+        keys = get_keyframes_of_SNTI(tree, node)
+        if len(keys) == 0 or not node.image or node.image.source != 'SEQUENCE':
+            self.report({'ERROR'}, "Select a ImageTexture node with a texture sequence and animtexture keyframes.")
+            return {'CANCELLED'}
+
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
-        if not node.image or node.image.source != 'SEQUENCE':
-            self.report({'ERROR'}, "Select a ImageTexture node with animtexture sequence first.")
-            return {'CANCELLED'}
 
         abspath = bpy.path.abspath(node.image.filepath)
         dir, name, padding, ext = get_sequence_path_info(abspath)
@@ -854,3 +866,6 @@ def animtexture_savewithfile(empty):
     context = bpy.context
     SAVE_ALL = context.preferences.addons[__package__].preferences.savewithfile == 'SAVE_ALL'
     bpy.ops.anim.animtexture_save(save_all=SAVE_ALL)
+
+
+MISSING_TEXTURE_ERROR = "There are keyframes left, but no image sequence in the texture node. Reattach the image sequence or delete the keyframes!"
