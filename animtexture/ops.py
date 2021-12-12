@@ -160,7 +160,6 @@ class ANIM_OT_insert_animtexture(Operator):
             node.image_user.use_auto_refresh = True
             node.animtexturekeynext = 0
         else:
-            print("test")
             if not node.image or node.image.source != "SEQUENCE":
                 self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
                 return {'CANCELLED'}
@@ -168,11 +167,14 @@ class ANIM_OT_insert_animtexture(Operator):
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
             try:
+                print(bpy.path.abspath(get_template(node.image.filepath)))
+                print(bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext)))
                 shutil.copyfile(
                     bpy.path.abspath(get_template(node.image.filepath)),
                     bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
                     )
-            except OSError:
+            except OSError as e:
+                print(e)
                 # TODO check what raised the error and give useful feedback
                 # (1) source file doesnt exist OR/AND (2) path not writable
                 # self.report()
@@ -475,10 +477,10 @@ class ANIM_OT_import_set_working_directory(Operator):
                 img_a = img_b
 
         #duplicate images into new working directory        
-        for key in keys:
+        for i, key in enumerate(keys):
             shutil.copyfile(
                 bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
-                bpy.path.abspath(os.path.join(self.directory, name + str(key).zfill(padding) + ext))
+                bpy.path.abspath(os.path.join(self.directory, name + str(i).zfill(padding) + ext))
                 )
 
         # create/overwrite keyframes
@@ -496,23 +498,19 @@ class ANIM_OT_import_set_working_directory(Operator):
             crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
         if len(crv.keyframe_points) < len(keys):
             crv.keyframe_points.add(len(keys) - len(crv.keyframe_points))
-        for pt, key in zip(crv.keyframe_points, keys):
-            pt.co.x = key
-            pt.co.y = key
+        for i in range(len(keys)):
+            pt = crv.keyframe_points[i]
+            pt.co.x = keys[i]
+            pt.co.y = i
             pt.interpolation = 'CONSTANT'
 
         node.animtexturekeynext = keys[-1] + 1
 
-        print(self.seq_filepath)
-        # imageblock, assign image block, add offset, 
+        new_path = os.path.join(self.directory, name + "0" * padding + ext)
         if self.use_rel_path and bpy.data.is_saved:
-            self.seq_filepath = bpy.path.relpath(self.seq_filepath)
+            new_path = bpy.path.relpath(new_path)
         
-        # set node image to image in new working directory
-        selected_image_name = os.path.basename(bpy.path.abspath(self.seq_filepath))
-        working_directory_path = bpy.path.abspath(os.path.join(self.directory, selected_image_name))
-
-        node.image = bpy.data.images.load(working_directory_path)
+        node.image = bpy.data.images.load(new_path)
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
 
@@ -595,7 +593,8 @@ class ANIM_OT_export_animtexture(Operator):
             self.report({'ERROR'}, "Select a ImageTexture node with animtexture sequence first.")
             return {'CANCELLED'}
 
-        dir, name, padding, ext = get_sequence_path_info(bpy.path.abspath(node.image.filepath))
+        abspath = bpy.path.abspath(node.image.filepath)
+        dir, name, padding, ext = get_sequence_path_info(abspath)
 
         keyframes = get_keyframes_of_SNTI(tree, node)
         keys = {int(k.co.x):int(k.co.y) for k in keyframes}
@@ -615,8 +614,9 @@ class ANIM_OT_export_animtexture(Operator):
                 path_out = os.path.join(self.directory, name +  str(frame).zfill(padding) + ext)
                 shutil.copyfile(path_in, path_out)
         if self.include_template:
-            path_in = os.path.join(dir, name + "template" + ext)
-            path_out = os.path.join(self.directory, name + "template" + ext)
+            template_name = get_template(os.path.basename(abspath))
+            path_in = os.path.join(dir, template_name)
+            path_out = os.path.join(self.directory, template_name)
             shutil.copyfile(path_in, path_out)
 
         return {'FINISHED'}
