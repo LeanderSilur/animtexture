@@ -16,6 +16,7 @@ from bpy.types import (
     PropertyGroup,
     Operator,
     ShaderNodeTexImage,
+    ThemeProperties,
     )
 from bpy.props import (
     BoolProperty, EnumProperty, IntProperty, IntVectorProperty, StringProperty, CollectionProperty
@@ -126,7 +127,6 @@ class ANIM_OT_insert_animtexture(Operator):
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
-
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
             img = bpy.data.images.new(self.name,
@@ -151,10 +151,8 @@ class ANIM_OT_insert_animtexture(Operator):
             img.file_format = self.filetype
             img.save()
             
-            shutil.copyfile(
-                bpy.path.abspath(path),
-                bpy.path.abspath(os.path.join(self.directory, self.name + "template" + ext))
-                )
+            shutil.copyfile(bpy.path.abspath(path),
+                bpy.path.abspath(bpy.path.abspath(get_template(path))))
 
             img.source = 'SEQUENCE'
             img.filepath = path
@@ -162,6 +160,7 @@ class ANIM_OT_insert_animtexture(Operator):
             node.image_user.use_auto_refresh = True
             node.animtexturekeynext = 0
         else:
+            print("test")
             if not node.image or node.image.source != "SEQUENCE":
                 self.report({'ERROR'}, "There seem to be keyframes left, but no image in the texture node. Did you accidentally detach the image from the texture node?")
                 return {'CANCELLED'}
@@ -170,7 +169,7 @@ class ANIM_OT_insert_animtexture(Operator):
             
             try:
                 shutil.copyfile(
-                    bpy.path.abspath(os.path.join(dir, name + "template" + ext)),
+                    bpy.path.abspath(get_template(node.image.filepath)),
                     bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
                     )
             except OSError:
@@ -441,11 +440,13 @@ class ANIM_OT_import_set_working_directory(Operator):
         dir, name, padding, ext = get_sequence_path_info(self.seq_filepath)
         all_files = os.listdir(dir)
 
-        if name + "template" + ext not in all_files:
+        first_image_name = name + "0" * padding + ext
+        template_name = get_template(first_image_name)
+        if template_name not in all_files:
             tmp_img = bpy.data.images.load(self.seq_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
-            tmp_img.filepath_raw = os.path.join(self.directory, name + "template" + ext)
+            tmp_img.filepath_raw = os.path.join(self.directory, template_name)
             tmp_img.save()
             bpy.data.images.remove(tmp_img)
         
@@ -649,6 +650,11 @@ class ANIM_OT_openimage_animtexture(Operator):
         self.report({'WARNING'}, "Open an ImageEditor or UV Editor first.")
         return {'CANCELLED'}
 
+def get_template(path: str) -> string:
+    if "." not in path:
+        raise Exception("Path should contain file extension.")
+    ext = "." + path.split(".")[-1]
+    return path[:-len(ext)] + "TEMPLATE" + ext
 
 def clean_directory(keyframe_points, absfilepath):
     """Removes all images except for the required images from the animtexture directory."""
@@ -657,7 +663,9 @@ def clean_directory(keyframe_points, absfilepath):
     def create_path(i):
         return os.path.join(dir, name + str(i).zfill(padding) + ext)
     required_files = [name + str(y).zfill(padding) + ext for y in key_values]
-    required_files.append(name + "template" + ext)
+    required_files.append(get_template(
+        name + "0" * padding + ext
+    ))
 
     for file in os.listdir(dir):
         if file not in required_files:
