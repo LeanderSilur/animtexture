@@ -127,6 +127,9 @@ class ANIM_OT_insert_animtexture(Operator):
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
+            if len(self.name) and self.name[-1:].isdigit():
+                self.name += "_"ax
+
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
             img = bpy.data.images.new(self.name,
@@ -167,8 +170,6 @@ class ANIM_OT_insert_animtexture(Operator):
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
             try:
-                print(bpy.path.abspath(get_template(node.image.filepath)))
-                print(bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext)))
                 shutil.copyfile(
                     bpy.path.abspath(get_template(node.image.filepath)),
                     bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
@@ -341,72 +342,6 @@ class ANIM_OT_import_animtexture(Operator):
         if not node:
             self.report({'ERROR'}, "Select a ImageTexture node first.")
             return {'CANCELLED'}
-        
-        # # get file info and files in directory
-        # dir, name, padding, ext = get_sequence_path_info(self.filepath)
-        # all_files = os.listdir(dir)
-
-        # create template if necessary
-        # if name + "template" + ext not in all_files:
-        #     tmp_img = bpy.data.images.load(self.filepath)
-        #     buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
-        #     tmp_img.pixels.foreach_set(buffer)
-        #     tmp_img.filepath_raw = os.path.join(dir, name + "template" + ext)
-        #     tmp_img.save()
-        #     bpy.data.images.remove(tmp_img)
-        
-        # length = len(name) + padding + len(ext)
-        # files = [f for f in all_files
-        #     if f.startswith(name)
-        #         and len(f) == length
-        #         and f[len(name):len(name) + padding].isdigit()
-        #         and f.endswith(ext)]
-        # files.sort()
-
-        # # get first image and remove doubles
-        # from filecmp import cmp
-
-        # a, b = len(name), len(name) + padding
-        # get_index = lambda filename: int(filename[a:b])
-
-        # img_a = os.path.basename(self.filepath)
-        # start = files.index(img_a)
-        # keys = [get_index(img_a)]
-        # for i in range(start + 1, len(files)):
-        #     img_b = files[i]
-        #     if not cmp(os.path.join(dir, img_a), os.path.join(dir, img_b)):
-        #         keys.append(get_index(img_b))
-        #         img_a = img_b
-
-        # # create/overwrite keyframes
-        # attach_action_if_needed(tree)
-
-        # datapath = 'nodes["' + node.name + '"].animtexturekey'
-        # crv = tree.animation_data.action.fcurves.find(datapath)
-        # if not crv:
-        #     crv = tree.animation_data.action.fcurves.new(datapath)
-        
-        # while len(crv.keyframe_points) > len(keys):
-        #     crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
-        # if len(crv.keyframe_points) < len(keys):
-        #     crv.keyframe_points.add(len(keys) - len(crv.keyframe_points))
-        # for pt, key in zip(crv.keyframe_points, keys):
-        #     pt.co.x = key
-        #     pt.co.y = key
-        #     pt.interpolation = 'CONSTANT'
-
-        # node.animtexturekeynext = keys[-1] + 1
-
-        # # imageblock, assign image block, add offset, 
-        # if self.use_rel_path and bpy.data.is_saved:
-        #     self.filepath = bpy.path.relpath(self.filepath)
-        
-        # node.image = bpy.data.images.load(self.filepath)
-        # node.image.source = 'SEQUENCE'
-        # node.image_user.use_auto_refresh = True
-
-        # node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
-        # update_texture(context)
 
         bpy.ops.anim.animtexture_set_working_dir('INVOKE_DEFAULT', seq_filepath = self.filepath, stop_at_gaps = self.stop_at_gaps, use_rel_path = self.use_rel_path)
 
@@ -444,14 +379,19 @@ class ANIM_OT_import_set_working_directory(Operator):
 
         first_image_name = name + "0" * padding + ext
         template_name = get_template(first_image_name)
-        if template_name not in all_files:
+        if template_name in all_files:
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(dir, template_name)),
+                bpy.path.abspath(os.path.join(self.directory, template_name))
+                )
+        else:
             tmp_img = bpy.data.images.load(self.seq_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
             tmp_img.filepath_raw = os.path.join(self.directory, template_name)
             tmp_img.save()
             bpy.data.images.remove(tmp_img)
-        
+            
         length = len(name) + padding + len(ext)
         files = [f for f in all_files
             if f.startswith(name)
@@ -670,7 +610,6 @@ def clean_directory(keyframe_points, absfilepath):
     for file in os.listdir(dir):
         if file not in required_files:
             os.remove(os.path.join(dir, file))
-            print(file)
             
     transfer = dict()
     covered = []
