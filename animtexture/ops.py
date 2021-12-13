@@ -128,7 +128,7 @@ class ANIM_OT_insert_animtexture(Operator):
         
         if not len(crv.keyframe_points):
             if len(self.name) and self.name[-1:].isdigit():
-                self.name += "_"ax
+                self.name += "_"
 
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
@@ -343,18 +343,18 @@ class ANIM_OT_import_animtexture(Operator):
             self.report({'ERROR'}, "Select a ImageTexture node first.")
             return {'CANCELLED'}
 
-        bpy.ops.anim.animtexture_set_working_dir('INVOKE_DEFAULT', seq_filepath = self.filepath, stop_at_gaps = self.stop_at_gaps, use_rel_path = self.use_rel_path)
+        bpy.ops.anim.animtexture_set_working_dir('INVOKE_DEFAULT', import_filepath = self.filepath, stop_at_gaps = self.stop_at_gaps, use_rel_path = self.use_rel_path)
 
         return {'FINISHED'}
 
-class ANIM_OT_import_set_working_directory(Operator):
+class ANIM_OT_import_set_working_directory_animtexture(Operator):
     """Set Directory as working directory for imported texture."""
     bl_label = "Set Working Directory"
     bl_idname = "anim.animtexture_set_working_dir"
     bl_description = "Select a folder where working files of imported sequence stay"
     bl_options = {'REGISTER'}
 
-    seq_filepath: bpy.props.StringProperty(
+    import_filepath: bpy.props.StringProperty(
         name="Sequence File Path",
         description="The File Path of the sequence that will be imported"
     )
@@ -374,7 +374,7 @@ class ANIM_OT_import_set_working_directory(Operator):
     def execute(self, context):
 
         # get file info and files in directory
-        dir, name, padding, ext = get_sequence_path_info(self.seq_filepath)
+        dir, name, padding, ext = get_sequence_path_info(self.import_filepath)
         all_files = os.listdir(dir)
 
         first_image_name = name + "0" * padding + ext
@@ -385,7 +385,7 @@ class ANIM_OT_import_set_working_directory(Operator):
                 bpy.path.abspath(os.path.join(self.directory, template_name))
                 )
         else:
-            tmp_img = bpy.data.images.load(self.seq_filepath)
+            tmp_img = bpy.data.images.load(self.import_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
             tmp_img.filepath_raw = os.path.join(self.directory, template_name)
@@ -407,7 +407,7 @@ class ANIM_OT_import_set_working_directory(Operator):
         a, b = len(name), len(name) + padding
         get_index = lambda filename: int(filename[a:b])
 
-        img_a = os.path.basename(self.seq_filepath)
+        img_a = os.path.basename(self.import_filepath)
         start = files.index(img_a)
         keys = [get_index(img_a)]
         for i in range(start + 1, len(files)):
