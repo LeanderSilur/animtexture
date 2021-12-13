@@ -16,6 +16,7 @@ from bpy.types import (
     PropertyGroup,
     Operator,
     ShaderNodeTexImage,
+    ThemeProperties,
     )
 from bpy.props import (
     BoolProperty, EnumProperty, IntProperty, IntVectorProperty, StringProperty, CollectionProperty
@@ -126,6 +127,8 @@ class ANIM_OT_insert_animtexture(Operator):
         datapath = self.datapath
         
         if not len(crv.keyframe_points):
+            if len(self.name) and self.name[-1:].isdigit():
+                self.name += "_"
 
             img = bpy.data.images.get(self.name)
             if img: bpy.data.images.remove(img)
@@ -151,10 +154,8 @@ class ANIM_OT_insert_animtexture(Operator):
             img.file_format = self.filetype
             img.save()
             
-            shutil.copyfile(
-                bpy.path.abspath(path),
-                bpy.path.abspath(os.path.join(self.directory, self.name + "template" + ext))
-                )
+            shutil.copyfile(bpy.path.abspath(path),
+                bpy.path.abspath(bpy.path.abspath(get_template(path))))
 
             img.source = 'SEQUENCE'
             img.filepath = path
@@ -170,10 +171,11 @@ class ANIM_OT_insert_animtexture(Operator):
             
             try:
                 shutil.copyfile(
-                    bpy.path.abspath(os.path.join(dir, name + "template" + ext)),
+                    bpy.path.abspath(get_template(node.image.filepath)),
                     bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
                     )
-            except OSError:
+            except OSError as e:
+                print(e)
                 # TODO check what raised the error and give useful feedback
                 # (1) source file doesnt exist OR/AND (2) path not writable
                 # self.report()
@@ -319,7 +321,6 @@ class ANIM_OT_save_animtexture(Operator):
                 print(">", e.name)
         return {'FINISHED'}
 
-
 class ANIM_OT_import_animtexture(Operator):
     """Imports an image sequence as an animtexture sequence."""
     bl_label = "Import"
@@ -341,26 +342,63 @@ class ANIM_OT_import_animtexture(Operator):
         if not node:
             self.report({'ERROR'}, "Select a ImageTexture node first.")
             return {'CANCELLED'}
-        
+
+        bpy.ops.anim.animtexture_set_working_dir('INVOKE_DEFAULT', import_filepath = self.filepath, stop_at_gaps = self.stop_at_gaps, use_rel_path = self.use_rel_path)
+
+        return {'FINISHED'}
+
+class ANIM_OT_import_set_working_directory_animtexture(Operator):
+    """Set Directory as working directory for imported texture."""
+    bl_label = "Set Working Directory"
+    bl_idname = "anim.animtexture_set_working_dir"
+    bl_description = "Select a folder where working files of imported sequence stay"
+    bl_options = {'REGISTER'}
+
+    import_filepath: bpy.props.StringProperty(
+        name="Sequence File Path",
+        description="The File Path of the sequence that will be imported"
+    )
+
+    stop_at_gaps: bpy.props.BoolProperty(name="Stop at Gaps")
+    use_rel_path: bpy.props.BoolProperty(name="Make Relative")
+
+    directory: bpy.props.StringProperty(
+        name="Import - Working directory Path",
+        description="Working directory Path for importing sequence"
+    )
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+
         # get file info and files in directory
-        dir, name, padding, ext = get_sequence_path_info(self.filepath)
+        dir, name, padding, ext = get_sequence_path_info(self.import_filepath)
         all_files = os.listdir(dir)
 
-        # create template if necessary
-        if name + "template" + ext not in all_files:
-            tmp_img = bpy.data.images.load(self.filepath)
+        first_image_name = name + "0" * padding + ext
+        template_name = get_template(first_image_name)
+        if template_name in all_files:
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(dir, template_name)),
+                bpy.path.abspath(os.path.join(self.directory, template_name))
+                )
+        else:
+            tmp_img = bpy.data.images.load(self.import_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
-            tmp_img.filepath_raw = os.path.join(dir, name + "template" + ext)
+            tmp_img.filepath_raw = os.path.join(self.directory, template_name)
             tmp_img.save()
             bpy.data.images.remove(tmp_img)
-        
+            
         length = len(name) + padding + len(ext)
         files = [f for f in all_files
             if f.startswith(name)
                 and len(f) == length
                 and f[len(name):len(name) + padding].isdigit()
                 and f.endswith(ext)]
+
         files.sort()
 
         # get first image and remove doubles
@@ -369,7 +407,7 @@ class ANIM_OT_import_animtexture(Operator):
         a, b = len(name), len(name) + padding
         get_index = lambda filename: int(filename[a:b])
 
-        img_a = os.path.basename(self.filepath)
+        img_a = os.path.basename(self.import_filepath)
         start = files.index(img_a)
         keys = [get_index(img_a)]
         for i in range(start + 1, len(files)):
@@ -378,37 +416,50 @@ class ANIM_OT_import_animtexture(Operator):
                 keys.append(get_index(img_b))
                 img_a = img_b
 
+        #duplicate images into new working directory        
+        for i, key in enumerate(keys):
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
+                bpy.path.abspath(os.path.join(self.directory, name + str(i).zfill(padding) + ext))
+                )
+
         # create/overwrite keyframes
+        tree = get_active_node_tree(context)
+        node =  get_active_SNTI(tree)
+
         attach_action_if_needed(tree)
 
         datapath = 'nodes["' + node.name + '"].animtexturekey'
         crv = tree.animation_data.action.fcurves.find(datapath)
         if not crv:
             crv = tree.animation_data.action.fcurves.new(datapath)
-        
+
         while len(crv.keyframe_points) > len(keys):
             crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
         if len(crv.keyframe_points) < len(keys):
             crv.keyframe_points.add(len(keys) - len(crv.keyframe_points))
-        for pt, key in zip(crv.keyframe_points, keys):
-            pt.co.x = key
-            pt.co.y = key
+        for i in range(len(keys)):
+            pt = crv.keyframe_points[i]
+            pt.co.x = keys[i]
+            pt.co.y = i
             pt.interpolation = 'CONSTANT'
 
         node.animtexturekeynext = keys[-1] + 1
 
-        # imageblock, assign image block, add offset, 
+        new_path = os.path.join(self.directory, name + "0" * padding + ext)
         if self.use_rel_path and bpy.data.is_saved:
-            self.filepath = bpy.path.relpath(self.filepath)
+            new_path = bpy.path.relpath(new_path)
         
-        node.image = bpy.data.images.load(self.filepath)
+        node.image = bpy.data.images.load(new_path)
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
 
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
+
         update_texture(context)
-        
+
         return {'FINISHED'}
+
 class ANIM_OT_import_single_animtexture(Operator):
     """Imports a single image into an animtexture sequence."""
     bl_label = "Import Single"
@@ -460,7 +511,6 @@ class ANIM_OT_import_single_animtexture(Operator):
 
         return {'FINISHED'}
 
-
 class ANIM_OT_export_animtexture(Operator):
     """Exports the animtexture sequence as an image sequence."""
     bl_label = "Export"
@@ -483,7 +533,8 @@ class ANIM_OT_export_animtexture(Operator):
             self.report({'ERROR'}, "Select a ImageTexture node with animtexture sequence first.")
             return {'CANCELLED'}
 
-        dir, name, padding, ext = get_sequence_path_info(bpy.path.abspath(node.image.filepath))
+        abspath = bpy.path.abspath(node.image.filepath)
+        dir, name, padding, ext = get_sequence_path_info(abspath)
 
         keyframes = get_keyframes_of_SNTI(tree, node)
         keys = {int(k.co.x):int(k.co.y) for k in keyframes}
@@ -503,8 +554,9 @@ class ANIM_OT_export_animtexture(Operator):
                 path_out = os.path.join(self.directory, name +  str(frame).zfill(padding) + ext)
                 shutil.copyfile(path_in, path_out)
         if self.include_template:
-            path_in = os.path.join(dir, name + "template" + ext)
-            path_out = os.path.join(self.directory, name + "template" + ext)
+            template_name = get_template(os.path.basename(abspath))
+            path_in = os.path.join(dir, template_name)
+            path_out = os.path.join(self.directory, template_name)
             shutil.copyfile(path_in, path_out)
 
         return {'FINISHED'}
@@ -538,6 +590,11 @@ class ANIM_OT_openimage_animtexture(Operator):
         self.report({'WARNING'}, "Open an ImageEditor or UV Editor first.")
         return {'CANCELLED'}
 
+def get_template(path: str) -> string:
+    if "." not in path:
+        raise Exception("Path should contain file extension.")
+    ext = "." + path.split(".")[-1]
+    return path[:-len(ext)] + "TEMPLATE" + ext
 
 def clean_directory(keyframe_points, absfilepath):
     """Removes all images except for the required images from the animtexture directory."""
@@ -546,12 +603,13 @@ def clean_directory(keyframe_points, absfilepath):
     def create_path(i):
         return os.path.join(dir, name + str(i).zfill(padding) + ext)
     required_files = [name + str(y).zfill(padding) + ext for y in key_values]
-    required_files.append(name + "template" + ext)
+    required_files.append(get_template(
+        name + "0" * padding + ext
+    ))
 
     for file in os.listdir(dir):
         if file not in required_files:
             os.remove(os.path.join(dir, file))
-            print(file)
             
     transfer = dict()
     covered = []
