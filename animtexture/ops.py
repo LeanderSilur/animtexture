@@ -109,12 +109,7 @@ class ANIM_OT_insert_animtexture(Operator):
         self.datapath = datapath
 
         if not len(crv.keyframe_points):
-            #assign unique id
-            i = 0
-            while os.path.exists(bpy.path.abspath("//animtexture" + str(i))):
-                i += 1
-            self.directory = "//animtexture" + str(i)
-            self.name = "AT" + str(i)
+            self.name = "AT"
             context.window_manager.fileselect_add(self)
             return {'RUNNING_MODAL'}
         else:
@@ -267,8 +262,10 @@ class ANIM_OT_save_animtexture(Operator):
         class Img():
             def __init__(self,
                     image: Image,
+                    node: Node,
                     keyframes: FCurveKeyframePoints) -> None:
                 self.image = image
+                self.node = node
                 self.keyframes = keyframes
         images = []
 
@@ -282,13 +279,13 @@ class ANIM_OT_save_animtexture(Operator):
                 for node in mat.node_tree.nodes:
                     keys = get_keyframes_of_SNTI(mat.node_tree, node)
                     if len(keys) > 0:
-                        images.append(Img(node.image, keys))
+                        images.append(Img(node.image, node, keys))
         else:
             node_tree = get_active_node_tree(context)
             node = get_active_SNTI(node_tree)
             keys = get_keyframes_of_SNTI(node_tree, node)
             if len(keys) > 0:
-                images.append(Img(node.image, keys))
+                images.append(Img(node.image, node, keys))
 
         if not len(images):
             return {'FINISHED'}
@@ -299,9 +296,12 @@ class ANIM_OT_save_animtexture(Operator):
             override['area'] = image_editor
 
             for img in images:
-                if not img.image or img.image.type != "SEQUENCE":
-                    errors.append("Missing")
-                    continue
+                if not img.image:
+                    errors.append(img.node.name + " - node has no texture selected.")
+                    continue 
+                if img.image.source != "SEQUENCE":
+                    errors.append(img.image.name + " - is no image sequence.")
+                    continue 
 
                 i = img.image
                 absfilepath = bpy.path.abspath(i.filepath)
@@ -606,7 +606,7 @@ def get_template(path: str) -> string:
     if "." not in path:
         raise Exception("Path should contain file extension.")
     ext = "." + path.split(".")[-1]
-    return path[:-len(ext)] + "TEMPLATE" + ext
+    return path[:-len(ext)] + "template" + ext
 
 def clean_directory(keyframe_points, absfilepath):
     """Removes all images except for the required images from the animtexture directory."""
