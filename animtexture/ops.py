@@ -130,10 +130,6 @@ class ANIM_OT_insert_animtexture(Operator):
             img = bpy.data.images.new(self.name,
                                     *self.dimensions,
                                     alpha=True)
-            # if self.rgba=='RGBA' and self.transparent:
-            #     buffer = [img.pixels[0] * 0] * len(img.pixels)
-            #     img.pixels.foreach_set(buffer)
-            # else:
             
             colorlist = list(self.bg_color) * int(len(img.pixels) / 4)
             img.pixels.foreach_set(colorlist)
@@ -151,7 +147,9 @@ class ANIM_OT_insert_animtexture(Operator):
             
             shutil.copyfile(bpy.path.abspath(path),
                 bpy.path.abspath(bpy.path.abspath(get_template(path))))
-
+            
+            if img.file_format == 'OPEN_EXR':
+                img.alpha_mode = 'PREMUL'
             img.source = 'SEQUENCE'
             img.filepath = path
             node.image = img
@@ -457,6 +455,9 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
             new_path = bpy.path.relpath(new_path)
         
         node.image = bpy.data.images.load(new_path)
+        if node.image.file_format == 'OPEN_EXR':
+                node.image.alpha_mode = 'PREMUL'
+
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
 
