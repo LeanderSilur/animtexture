@@ -63,14 +63,6 @@ class ANIM_OT_insert_animtexture(Operator):
         size=2,
         default=(512, 512)
     )
-    # rgba: EnumProperty(
-    #     name="Color Space",
-    #     description="Color Space of the Images.",
-    #     items = [
-    #         ('RGB', 'RGB', ''),
-    #         ('RGBA', 'RGBA', '')],
-    #     default='RGBA'
-    # )
 
     bg_color: bpy.props.FloatVectorProperty(
         name="Background Color",
@@ -81,11 +73,12 @@ class ANIM_OT_insert_animtexture(Operator):
         min=0.0, max=1.0,
     )
 
-    # transparent: BoolProperty(
-    #     name= "Transparent by Default",
-    #     description="Newly created images are transparent in alpha by default.",
-    #     default=True
-    # )
+    delete_keyframes: BoolProperty(
+        name= "Delete leftover keyframes",
+        description="Leftover keyframes from old image texture are deleted when new tecture is created.",
+        default=False,
+        options ={'HIDDEN'},
+    )
 
     @classmethod
     def poll(self, context):
@@ -108,6 +101,15 @@ class ANIM_OT_insert_animtexture(Operator):
         self.crv = crv
         self.datapath = datapath
 
+        if len(crv.keyframe_points) and (not node.image or node.image.source != "SEQUENCE"):
+            if self.delete_keyframes:
+                pts = crv.keyframe_points
+                while len(pts):
+                    pts.remove(pts[0], fast=True)
+            else:
+                bpy.ops.anim.animtexture_insertdelete('INVOKE_DEFAULT')
+                return {'CANCELLED'}
+
         if not len(crv.keyframe_points):
             self.name = "AT"
             context.window_manager.fileselect_add(self)
@@ -120,7 +122,7 @@ class ANIM_OT_insert_animtexture(Operator):
         node = self.node
         crv = self.crv
         datapath = self.datapath
-        
+
         if not len(crv.keyframe_points):
             if len(self.name) and self.name[-1:].isdigit():
                 self.name += "_"
@@ -156,9 +158,6 @@ class ANIM_OT_insert_animtexture(Operator):
             node.image_user.use_auto_refresh = True
             node.animtexturekeynext = 0
         else:
-            if not node.image or node.image.source != "SEQUENCE":
-                self.report({'ERROR'}, MISSING_TEXTURE_ERROR)
-                return {'CANCELLED'}
                 
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
@@ -602,6 +601,24 @@ class ANIM_OT_openimage_animtexture(Operator):
 
         self.report({'WARNING'}, "Open an ImageEditor or UV Editor first.")
         return {'CANCELLED'}
+
+class ANIM_OT_insertdelete_animtexture(Operator):
+    bl_label = "No Image Sequence"
+    bl_idname = "anim.animtexture_insertdelete"
+    bl_description = "Open dialogue Box to ask whether or not to delete the keyframes"
+
+
+    def execute(self, context):
+        bpy.ops.anim.animtexture_insert('INVOKE_DEFAULT', delete_keyframes = True)
+        return {'FINISHED'}
+
+    def draw(self, context):
+        self.layout.label(text="There are keyframes but no image sequence on this node. Delete the keyframes and create a new sequence?")
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+
 
 def get_template(path: str) -> string:
     if "." not in path:
