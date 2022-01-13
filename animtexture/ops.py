@@ -1,3 +1,4 @@
+from re import T
 import string
 import bpy
 from typing import List, Tuple
@@ -12,7 +13,7 @@ from bpy.props import (
 import os
 import shutil
 import pathlib
-import filecmp.cmp as filecompare
+from filecmp import cmp as filecompare
 
 class ANIM_OT_insert_animtexture(Operator):
     """Adds a new animtexture keyframe."""
@@ -796,7 +797,9 @@ def animtexturekey_set(self, value):
     """Setter for SNTI attribute `animtexturekey`."""
     if "ATK" not in self or self["ATK"] != value:
         self["ATK"] = value
-        update_texture_from_image_number(self, value)
+        update_texture_from_image_number(self, value, bpy.context.scene.frame_current)
+        
+
 
 
 def animtexture_startupcheckhandler():
@@ -872,10 +875,10 @@ def update_texture(context):
 
     # image_number_0 = int(crv.evaluate(frame))
     image_number = node.animtexturekey
-    update_texture_from_image_number(node, image_number)
+    update_texture_from_image_number(node, image_number, context.scene.frame_current)
 
 
-def update_texture_from_image_number(node, image_number, frame = context.scene.frame_current):
+def update_texture_from_image_number(node: ShaderNodeTexImage, image_number, frame):
     """Update the displayed texture, based on the current frame."""
     frame_offset = image_number - frame
     duration = max(frame, 1)
@@ -894,19 +897,18 @@ def update_display_texture_imageeditor(image, duration, offset):
             if area.spaces.active.image == image:
                 area.spaces.active.image_user.frame_duration = duration
                 area.spaces.active.image_user.frame_offset = offset
-                    
+    
 
 @persistent
 def animtexture_framechange(scene):
     update_texture(bpy.context)
-    bpy.context.view_layer.update()
+    
 
 
 @persistent
 def animtexture_loadpost(scene):
     animtexture_startupcheckhandler()
     update_texture(bpy.context)
-    
     bpy.context.view_layer.update()
 
 
