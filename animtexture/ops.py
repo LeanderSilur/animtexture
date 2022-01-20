@@ -436,20 +436,21 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
             pt.co.x = keys[i]
             pt.co.y = i
             pt.interpolation = 'CONSTANT'
-
+            
         # set new image path in node
         node.animtexturekeynext = keys[-1] + 1
         new_path = os.path.join(self.directory, name + "0" * padding + ext)
         if self.use_rel_path and bpy.data.is_saved:
             new_path = bpy.path.relpath(new_path)
-        node.image.source = 'SEQUENCE'
-        node.image_user.use_auto_refresh = True
-        node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
-        
+
         # if file format is open_exr it needs to be premultiplied
         node.image = bpy.data.images.load(new_path)
         if node.image.file_format == 'OPEN_EXR':
                 node.image.alpha_mode = 'PREMUL'
+
+        node.image.source = 'SEQUENCE'
+        node.image_user.use_auto_refresh = True
+        node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
 
         # change node color
         node.use_custom_color = True
