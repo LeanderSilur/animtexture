@@ -164,6 +164,8 @@ class ANIM_OT_insert_animtexture(Operator):
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
+        update_node_color()
+
         return {'FINISHED'}
 
 
@@ -448,6 +450,7 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         if node.image.file_format == 'OPEN_EXR':
                 node.image.alpha_mode = 'PREMUL'
 
+        update_node_color()
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
@@ -800,8 +803,6 @@ def animtexturekey_set(self, value):
         self["ATK"] = value
         update_texture_from_image_number(self, value, bpy.context.scene.frame_current)
         
-
-
 
 def animtexture_startupcheckhandler():
     """Checks if image files, that are connected to animtexture keyframes, are missing at startup.
