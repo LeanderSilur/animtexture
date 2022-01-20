@@ -27,3 +27,9 @@ To create a duplicate of the keyframe, you can simply duplicate it in the timeli
 Exporting the image sequence will create an image sequence containing all frames from start to end. Other than just saving the keyframes, this will export holds as multiple images containing the same information. This can be helpful if you want to use the texture without the addon installed.
 
 When importing image sequences the addon will look for duplicate files, trying to supply you only with relevant keyframes.
+
+## Limitations
+
+Moving the keyframes on the timeline only updates the image in the 3D View, if the *properties panel* of the shader editor is open. Scrubbing the timeline or playback updates as expected.
+
+![setup](doc/setup.png)
