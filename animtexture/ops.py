@@ -164,7 +164,9 @@ class ANIM_OT_insert_animtexture(Operator):
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
-        update_node_color()
+        update_node_color(node)
+
+        msgbus_subscribe_to(node, tree)
 
         return {'FINISHED'}
 
@@ -444,16 +446,19 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         new_path = os.path.join(self.directory, name + "0" * padding + ext)
         if self.use_rel_path and bpy.data.is_saved:
             new_path = bpy.path.relpath(new_path)
+
+        node.image = bpy.data.images.load(new_path)
+        # if file format is open_exr it needs to be premultiplied
+        
+        if node.image.file_format == 'OPEN_EXR':
+            node.image.alpha_mode = 'PREMUL'
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
-        
-        # if file format is open_exr it needs to be premultiplied
-        node.image = bpy.data.images.load(new_path)
-        if node.image.file_format == 'OPEN_EXR':
-                node.image.alpha_mode = 'PREMUL'
 
-        update_node_color()
+        update_node_color(node)
+
+        msgbus_subscribe_to(node, tree)
 
         update_texture(context)
         return {'FINISHED'}
@@ -897,6 +902,29 @@ def update_display_texture_imageeditor(image, duration, offset):
                 area.spaces.active.image_user.frame_offset = offset
     
 
+def path_exists(path):
+    """Returns a Boolean, wether or not the path(argument) exists"""
+    obj = pathlib.Path(path)
+    return obj.exists()
+
+def msgbus_callback(node, node_tree):
+    print ("Msgbus - something changed")
+    if get_keyframes_of_SNTI(node_tree,node):
+       update_node_color(node)
+    else:
+        node.use_custom_color = False
+        pass
+
+owner = object()
+
+def msgbus_subscribe_to(node, node_tree):
+    bpy.msgbus.subscribe_rna(
+        key=node,
+        owner=owner,
+        args=(node,node_tree,),
+        notify=msgbus_callback,
+    )
+
 @persistent
 def animtexture_framechange(scene):
     update_texture(bpy.context)
@@ -905,6 +933,22 @@ def animtexture_framechange(scene):
 
 @persistent
 def animtexture_loadpost(scene):
+    for mat in bpy.data.materials:
+        if (    not mat.use_nodes or
+                not mat.node_tree.animation_data or
+                not mat.node_tree.animation_data.action):
+            continue
+        for node in mat.node_tree.nodes:
+            keys = get_keyframes_of_SNTI(mat.node_tree, node)
+            if len(keys) == 0:
+                continue
+
+            update_node_color(node)
+            print(mat.node_tree, node)
+            msgbus_subscribe_to(node, mat.node_tree)
+    
+
+def animtexture_pre(scene):
     animtexture_startupcheckhandler()
     update_texture(bpy.context)
     bpy.context.view_layer.update()
