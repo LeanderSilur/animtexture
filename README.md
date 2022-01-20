@@ -1,7 +1,7 @@
 # AnimTexture
-<sup>(just like AnimAll)</sup>
+<sup>like [AnimAll](https://docs.blender.org/manual/en/latest/addons/animation/animall.html)</sup>
 
-Animate Textures in Blender
+### Drawn Pixel Animation on Textures in Blender
 
 "AnimTexture" is a Blender Addon that enables you to do 2d keyframe animation on a texture using an image sequence, utilizing the texture paint function in blender to let you draw on the surface of objects. You can create an image sequence as a texture, add keyframes to the timeline, save, import and export images.
 
