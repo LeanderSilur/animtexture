@@ -164,7 +164,7 @@ class ANIM_OT_insert_animtexture(Operator):
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
-        update_node_color()
+        update_node_color(node)
 
         return {'FINISHED'}
 
@@ -450,14 +450,11 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         if node.image.file_format == 'OPEN_EXR':
                 node.image.alpha_mode = 'PREMUL'
 
-        update_node_color()
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
 
-        # change node color
-        node.use_custom_color = True
-        node.color = COLOR_ANIMTEXTURE_ACTIVE
+        update_node_color(node)
 
         update_texture(context)
         return {'FINISHED'}
