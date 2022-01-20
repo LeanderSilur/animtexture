@@ -804,41 +804,6 @@ def animtexturekey_set(self, value):
         update_texture_from_image_number(self, value, bpy.context.scene.frame_current)
         
 
-def animtexture_startupcheckhandler():
-    """Checks if image files, that are connected to animtexture keyframes, are missing at startup.
-    Shows a popup panel to display errors"""
-    errors = {}
-    for mat in bpy.data.materials:
-        if (    not mat.use_nodes or
-                not mat.node_tree.animation_data or
-                not mat.node_tree.animation_data.action):
-            continue
-        for node in mat.node_tree.nodes:
-            keys = get_keyframes_of_SNTI(mat.node_tree, node)
-            if len(keys) == 0:
-                continue
-            if not node.image or node.image.source != 'SEQUENCE':
-                continue
-
-            dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
-            if os.path.exists(dir):
-                indices = [int(key.co.y) for key in keys]
-                existingfiles= os.listdir(dir)
-                for index in indices:
-                    filename = name + str(index).zfill(padding) + ext
-                    if not filename in existingfiles:
-                        if node.name not in errors:
-                            errors[node.name] = []
-                        errors[node.name].append(filename)
-    if len(errors):
-        def draw(self, context):
-            col = self.layout.column()
-            for nodename, imagenumbers in errors.items():
-                col.label(text=nodename + str(imagenumbers))
-
-        bpy.context.window_manager.popup_menu(draw, title = "Animtexture: There are files missing:", icon='ERROR')   
-
-
 def get_animkeydatapath(node_name:string)->string:
     return ('nodes["' + node_name + '"].animtexturekey')
 
@@ -906,21 +871,22 @@ def path_exists(path):
     obj = pathlib.Path(path)
     return obj.exists()
 
-def msgbus_callback(node, node_tree):
-    print ("Msgbus - something changed")
+def msgbus_callback(node, node_tree, owner):
     if get_keyframes_of_SNTI(node_tree,node):
        update_node_color(node)
     else:
         node.use_custom_color = False
+        bpy.msgbus.clear_by_owner(owner)
         pass
 
-owner = object()
+owners = []
 
 def msgbus_subscribe_to(node, node_tree):
+    owners.append(object())
     bpy.msgbus.subscribe_rna(
         key=node,
-        owner=owner,
-        args=(node,node_tree,),
+        owner=owners[-1],
+        args=(node,node_tree,owners[-1]),
         notify=msgbus_callback,
     )
 
@@ -929,9 +895,51 @@ def animtexture_framechange(scene):
     update_texture(bpy.context)
     
 
+@persistent
+def animtexture_loadpre(scene):
+    """Checks if image files, that are connected to animtexture keyframes, are missing at startup.
+    Shows a popup panel to display errors.
+    Update textures."""
+    errors = {}
+    for mat in bpy.data.materials:
+        if (    not mat.use_nodes or
+                not mat.node_tree.animation_data or
+                not mat.node_tree.animation_data.action):
+            continue
+        for node in mat.node_tree.nodes:
+            keys = get_keyframes_of_SNTI(mat.node_tree, node)
+            if len(keys) == 0:
+                continue
+            if not node.image or node.image.source != 'SEQUENCE':
+                continue
+
+            dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
+            if os.path.exists(dir):
+                indices = [int(key.co.y) for key in keys]
+                existingfiles= os.listdir(dir)
+                for index in indices:
+                    filename = name + str(index).zfill(padding) + ext
+                    if not filename in existingfiles:
+                        if node.name not in errors:
+                            errors[node.name] = []
+                        errors[node.name].append(filename)
+    if len(errors):
+        def draw(self, context):
+            col = self.layout.column()
+            for nodename, imagenumbers in errors.items():
+                col.label(text=nodename + str(imagenumbers))
+
+        bpy.context.window_manager.popup_menu(draw, title = "Animtexture: There are files missing:", icon='ERROR')   
+
+    update_texture(bpy.context)
+    bpy.context.view_layer.update()
+
 
 @persistent
 def animtexture_loadpost(scene):
+    """Set color of node,
+    Attach message bus handler to
+    check if a valid image sequence is present."""
     for mat in bpy.data.materials:
         if (    not mat.use_nodes or
                 not mat.node_tree.animation_data or
@@ -945,12 +953,6 @@ def animtexture_loadpost(scene):
             update_node_color(node)
             print(mat.node_tree, node)
             msgbus_subscribe_to(node, mat.node_tree)
-    
-
-def animtexture_pre(scene):
-    animtexture_startupcheckhandler()
-    update_texture(bpy.context)
-    bpy.context.view_layer.update()
 
 
 @persistent
