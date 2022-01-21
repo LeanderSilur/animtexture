@@ -871,6 +871,19 @@ def path_exists(path):
     obj = pathlib.Path(path)
     return obj.exists()
 
+
+def onion_create_nodes(node_tree: ShaderNodeTree):
+    for name in ["ONION_PREV", "ONION_NEXT"]:
+        if node_tree.nodes.find(name) == -1:
+            node = node_tree.nodes.new('ShaderNodeTextureImage')
+            node.name = name
+
+def onion_get_nodes(node_tree: ShaderNodeTree):
+    return node_tree.nodes.get("ONION_PREV"), node_tree.nodes.get("ONION_NEXT")
+
+owners = []
+
+
 def msgbus_callback(node, node_tree, owner):
     if get_keyframes_of_SNTI(node_tree,node):
        update_node_color(node)
@@ -879,7 +892,6 @@ def msgbus_callback(node, node_tree, owner):
         bpy.msgbus.clear_by_owner(owner)
         pass
 
-owners = []
 
 def msgbus_subscribe_to(node, node_tree):
     owners.append(object())
