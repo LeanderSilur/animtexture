@@ -140,6 +140,9 @@ class ANIM_OT_insert_animtexture(Operator):
             node.image = img
             node.image_user.use_auto_refresh = True
             node.animtexturekeynext = 0
+
+            msgbus_subscribe_to(node, tree)
+
         else:
             dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
             
@@ -165,8 +168,6 @@ class ANIM_OT_insert_animtexture(Operator):
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
         update_node_color(node)
-
-        msgbus_subscribe_to(node, tree)
 
         return {'FINISHED'}
 
