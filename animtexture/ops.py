@@ -1,3 +1,4 @@
+from importlib.resources import path
 from re import T
 import string
 import bpy
@@ -165,7 +166,6 @@ class ANIM_OT_insert_animtexture(Operator):
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
         update_node_color(node)
-
         msgbus_subscribe_to(node, tree)
 
         return {'FINISHED'}
