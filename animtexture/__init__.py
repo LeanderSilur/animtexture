@@ -59,7 +59,7 @@ register_classes = [
     ops.ANIM_OT_export_animtexture,
     ops.ANIM_OT_openimage_animtexture,
     ops.ANIM_OT_insertdelete_animtexture,
-    ops.ANIM_OT_inserttemplate_animtexture,
+    ops.ANIM_OT_insertmissingtemplate_animtexture,
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
     ]

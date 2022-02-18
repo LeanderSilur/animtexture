@@ -114,8 +114,8 @@ class ANIM_OT_insert_animtexture(Operator):
                                     *self.dimensions,
                                     alpha=True)
             
-            colorlist = list(self.bg_color) * int(len(img.pixels) / 4)
-            img.pixels.foreach_set(colorlist)
+            buffer = list(self.bg_color) * int(len(img.pixels) / 4)
+            img.pixels.foreach_set(buffer)
 
             # create directory
             full_path = bpy.path.abspath(self.directory)
@@ -155,9 +155,10 @@ class ANIM_OT_insert_animtexture(Operator):
                         name + str(node.animtexturekeynext).zfill(padding) + ext))
                     )
             except OSError as e:
+                # if the template file is missing, call dialog box operator (missing template error) 
                 path = bpy.path.abspath(get_template(node.image.filepath))
                 if not pathlib.Path(path).exists():
-                    bpy.ops.anim.animtexture_inserttemplate('INVOKE_DEFAULT')
+                    bpy.ops.anim.animtexture_insertmissingtemplate('INVOKE_DEFAULT')
                 else:
                     self.report({'ERROR'}, "Unknown problem.")
                 return {'CANCELLED'}
@@ -643,7 +644,7 @@ class ANIM_OT_insertdelete_animtexture(Operator):
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
 
-class ANIM_OT_inserttemplate_animtexture(Operator):
+class ANIM_OT_insertmissingtemplate_animtexture(Operator):
     """"
     This Operator is called, when inserting a new keyframe, but the template file is missing.
     Opens a Dialog, asking about creating a new empty template file.
@@ -651,10 +652,10 @@ class ANIM_OT_inserttemplate_animtexture(Operator):
     """
 
     bl_label = "Template File is missing"
-    bl_idname = "anim.animtexture_inserttemplate"
+    bl_idname = "anim.animtexture_insertmissingtemplate"
     bl_description = "Open dialogue Box to ask whether or not to create new template file."
 
-    bg_color: bpy.props.FloatVectorProperty(
+    color: bpy.props.FloatVectorProperty(
         name="Background Color",
         description="Background Color for newly created images",
         subtype="COLOR",
@@ -669,13 +670,12 @@ class ANIM_OT_inserttemplate_animtexture(Operator):
         node = get_active_SNTI(tree)
         template_path = get_template(node.image.filepath)
 
-        # open the first image of the sequence, set_bg_color
+        # open the first image of the sequence, set color
         #  and save it as the template file
         tmp_img = bpy.data.images.load(node.image.filepath)
-        buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
 
-        colorlist = list(self.bg_color) * int(len(tmp_img.pixels) / 4)
-        tmp_img.pixels.foreach_set(colorlist)
+        buffer = list(self.color) * int(len(tmp_img.pixels) / 4)
+        tmp_img.pixels.foreach_set(buffer)
         tmp_img.filepath_raw = template_path
         tmp_img.save()
         bpy.data.images.remove(tmp_img)
@@ -685,7 +685,7 @@ class ANIM_OT_inserttemplate_animtexture(Operator):
 
     def draw(self, context):
         self.layout.prop(self, "bg_color", text="Background Color")
-        self.layout.label(text="The template file is missing. Create a new empty template file?")
+        self.layout.label(text="The template file is missing. Create a new template file?")
 
     def invoke(self, context, event):
         wm = context.window_manager
