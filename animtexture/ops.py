@@ -564,6 +564,9 @@ class ANIM_OT_export_animtexture(Operator):
         keyframes = get_keyframes_of_SNTI(tree, node)
         keys = {int(k.co.x):int(k.co.y) for k in keyframes}
 
+        missing_files = []
+        failed_files = []
+
         # copy image files to export directory
         if self.fill_gaps:
             key = keys[min(keys.keys())]
@@ -574,7 +577,16 @@ class ANIM_OT_export_animtexture(Operator):
                     name + str(key).zfill(padding) + ext)
                 path_export = os.path.join(self.export_directory,
                     name + str(frame).zfill(padding) + ext)
-                shutil.copyfile(path_in, path_export)
+                try:
+                    shutil.copyfile(path_in, path_export)
+
+                except OSError as e:
+                    # if the image file is missing or failed to copy, add the image path to error list 
+                    if not pathlib.Path(path_in).exists():
+                        missing_files.append(path_in)
+                    else:
+                        failed_files.append(path_export)
+
         else:
             for frame in keys:
                 key = keys[frame]
@@ -582,14 +594,39 @@ class ANIM_OT_export_animtexture(Operator):
                     name + str(key).zfill(padding) + ext)
                 path_export = os.path.join(self.export_directory,
                     name +  str(frame).zfill(padding) + ext)
-                shutil.copyfile(path_in, path_export)
-        
+                try:
+                    shutil.copyfile(path_in, path_export)
+
+                except OSError as e:
+                    # if the image file is missing or failed to copy, add the image path to error list 
+                    if not pathlib.Path(path_in).exists():
+                        missing_files.append(path_in)
+                    else:
+                        failed_files.append(path_export)
+
         # copy template file to export directory
         if self.include_template:
             template_name = get_template(os.path.basename(abspath))
             path_in = os.path.join(dir, template_name)
             path_export = os.path.join(self.export_directory, template_name)
-            shutil.copyfile(path_in, path_export)
+            try:
+                shutil.copyfile(path_in, path_export)
+
+            except OSError as e:
+                # if the template file is missing or failed to copy, add the template file path to error list 
+                if not pathlib.Path(path_in).exists():
+                    missing_files.append(path_in)
+                else:
+                    failed_files.append(path_export)
+
+        if len(missing_files):
+            print("Missing Files:")
+            for i in missing_files:
+                print(missing_files)
+        if len(failed_files):
+            print("Missing Files:")
+            for i in missing_files:
+                print(missing_files)
 
         return {'FINISHED'}
 
