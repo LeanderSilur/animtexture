@@ -1012,7 +1012,6 @@ def animtexture_loadpost(scene):
                 continue
 
             update_node_color(node)
-            print(mat.node_tree, node)
             msgbus_subscribe_to(node, mat.node_tree)
 
 
