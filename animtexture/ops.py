@@ -526,7 +526,7 @@ class ANIM_OT_export_animtexture(Operator):
     bl_description = "Export the animated texture"
     bl_options = {'REGISTER'}
 
-    export_directory: bpy.props.StringProperty(
+    directory: bpy.props.StringProperty(
         subtype="DIR_PATH"
         )
     fill_gaps: bpy.props.BoolProperty(
@@ -562,34 +562,51 @@ class ANIM_OT_export_animtexture(Operator):
         dir, name, padding, ext = get_sequence_path_info(abspath)
 
         keyframes = get_keyframes_of_SNTI(tree, node)
+        # keys: {frame => image_number}
         keys = {int(k.co.x):int(k.co.y) for k in keyframes}
 
-        # copy image files to export directory
+        # if filling gaps is required, assign an image_number to EACH frame
         if self.fill_gaps:
-            key = keys[min(keys.keys())]
-            for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
-                if frame in keys:
-                    key = keys[frame]
-                path_in = os.path.join(dir,
-                    name + str(key).zfill(padding) + ext)
-                path_export = os.path.join(self.export_directory,
-                    name + str(frame).zfill(padding) + ext)
-                shutil.copyfile(path_in, path_export)
-        else:
-            for frame in keys:
-                key = keys[frame]
-                path_in = os.path.join(dir,
-                    name + str(key).zfill(padding) + ext)
-                path_export = os.path.join(self.export_directory,
-                    name +  str(frame).zfill(padding) + ext)
-                shutil.copyfile(path_in, path_export)
-        
-        # copy template file to export directory
+            frames = range(context.scene.frame_start, context.scene.frame_end + 1)
+            keys = {frame:keys[
+                        max([min(keys.keys())] + [k for k in keys.keys() if k <= frame])
+                    ]
+                    for frame in frames}
+
+        # create a lookup of input and output files
+        # files: {target -> str: source -> str}
+        files = {name + str(frame).zfill(padding) + ext:
+                    name + str(image_number).zfill(padding) + ext
+                    for frame, image_number in keys.items()
+                }
         if self.include_template:
             template_name = get_template(os.path.basename(abspath))
-            path_in = os.path.join(dir, template_name)
-            path_export = os.path.join(self.export_directory, template_name)
-            shutil.copyfile(path_in, path_export)
+            files[template_name] = template_name
+
+        missing_files = set()
+        failed_files = set()
+        for file_target, file_source in files.items():
+            path_in = os.path.join(dir, file_source)
+            path_export = os.path.join(self.directory, file_target)
+            try:
+                shutil.copyfile(path_in, path_export)
+            except OSError as e:
+                # if the image file is missing or failed to copy,
+                # add the image path to error list 
+                if not pathlib.Path(path_in).exists():
+                    missing_files.add(file_source)
+                else:
+                    failed_files.add(file_source + " > " + file_target)
+        
+        for msg, files in [ ["Missing", missing_files],
+                            ["Failed", failed_files] ]:
+            if len(files): print(msg, "Files:")
+            [print("  ", name) for name in files]
+        if len(missing_files) + len(failed_files):
+            self.report({'ERROR'}, str(len(missing_files) + len(failed_files)) + 
+                """ images failed to export. Look in the console for a
+                complete list.""")
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
