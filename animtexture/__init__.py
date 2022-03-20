@@ -44,10 +44,6 @@ from bpy.props import (
 from bpy.app import handlers
 from . import ops
 from . import ui
-from .keymaps import setup_keymaps
-
-#from . import auto_load
-#auto_load.init()
 
 register_classes = [
     ops.ANIM_OT_insert_animtexture,
@@ -63,7 +59,15 @@ register_classes = [
     ui.AnimtextureAddonPreferences,
     ui.VIEW3D_PT_animtexture,
     ]
+
 addon_keymaps = []
+kmi_defs = (
+    (ops.ANIM_OT_insert_animtexture.bl_idname, 'A', 'PRESS', True, True, False),
+    (ops.ANIM_OT_duplicate_animtexture.bl_idname, 'D', 'PRESS', True, True, False),
+    (ops.ANIM_OT_export_animtexture.bl_idname, 'E', 'PRESS', True, True, False),
+    (ops.ANIM_OT_import_animtexture.bl_idname, 'I', 'PRESS', True, True, False),
+)
+
 
 def register():
     for cls in register_classes:
@@ -94,7 +98,10 @@ def register():
     wm = bpy.context.window_manager
     kc = wm.keyconfigs.addon
     if kc:
-        setup_keymaps(wm, addon_keymaps)
+        km = wm.keyconfigs.addon.keymaps.new(name='3D View', space_type='VIEW_3D')
+        for (identifier, key, action, CTRL, SHIFT, ALT) in kmi_defs:
+            kmi = km.keymap_items.new(identifier, key, action, ctrl=CTRL, shift=SHIFT, alt=ALT)
+            addon_keymaps.append((km, kmi))
 
 def unregister():
     for km, kmi in addon_keymaps:
