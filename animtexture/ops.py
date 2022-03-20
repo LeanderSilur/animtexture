@@ -569,14 +569,12 @@ class ANIM_OT_export_animtexture(Operator):
         if self.fill_gaps:
             frames = range(context.scene.frame_start, context.scene.frame_end + 1)
             keys = {frame:keys[
-                            min(keys.keys(),
-                            key=lambda kx: frame-kx if frame >= kx
-                                                else frames[-1] + 1)
-                        ]
+                        max([min(keys.keys())] + [k for k in keys.keys() if k <= frame])
+                    ]
                     for frame in frames}
 
         # create a lookup of input and output files
-        # files: {target: source}
+        # files: {target -> str: source -> str}
         files = {name + str(frame).zfill(padding) + ext:
                     name + str(image_number).zfill(padding) + ext
                     for frame, image_number in keys.items()
