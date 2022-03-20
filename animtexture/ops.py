@@ -1,3 +1,4 @@
+from math import fabs
 from re import T
 import string
 import bpy
@@ -95,7 +96,7 @@ class ANIM_OT_insert_animtexture(Operator):
             return {'RUNNING_MODAL'}
         else:
             return self.execute(context)
-        
+
     def execute(self, context):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
@@ -103,76 +104,84 @@ class ANIM_OT_insert_animtexture(Operator):
         crv = tree.animation_data.action.fcurves.find(datapath)
 
         if not len(crv.keyframe_points):
-
-            # create a new image
-            if len(self.name) and self.name[-1:].isdigit():
-                self.name += "_"
-
-            img = bpy.data.images.get(self.name)
-            if img: bpy.data.images.remove(img)
-            img = bpy.data.images.new(self.name,
-                                    *self.dimensions,
-                                    alpha=True)
-            
-            buffer = list(self.bg_color) * int(len(img.pixels) / 4)
-            img.pixels.foreach_set(buffer)
-
             # create directory
             full_path = bpy.path.abspath(self.directory)
             pathlib.Path(full_path).mkdir(parents=True, exist_ok=True)
-            
-            # create image file in directory
-            ext = "." + str(self.filetype).split("_")[-1].lower()
-            path = os.path.join(self.directory, self.name + "0" * self.padding
-                +  ext)
-            img.filepath_raw = path
-            img.file_format = self.filetype
-            img.save()
-            
+
+            img = self.create_new_image(self.name, self.dimensions, self.bg_color)
+            self.save_image(img, self.directory, self.name, self.filetype, self.padding)
+
             #create template
-            shutil.copyfile(bpy.path.abspath(path),
-                bpy.path.abspath(bpy.path.abspath(get_template(path))))
+            shutil.copyfile(bpy.path.abspath(img.filepath),
+                bpy.path.abspath(bpy.path.abspath(get_template(img.filepath))))
             
-            if img.file_format == 'OPEN_EXR':
-                img.alpha_mode = 'PREMUL'
-            img.source = 'SEQUENCE'
-            img.filepath = path
-            node.image = img
-            node.image_user.use_auto_refresh = True
-            node.animtexturekeynext = 0
-
+            node = self.create_sequence_node(img, node, img.filepath)
             msgbus_subscribe_to(node, tree)
-
         else:
-            dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
-            
-            try:
-                # create new image from template
-                shutil.copyfile(
-                    bpy.path.abspath(get_template(node.image.filepath)),
-                    bpy.path.abspath(os.path.join(
-                        dir,
-                        name + str(node.animtexturekeynext).zfill(padding) + ext))
-                    )
-            except OSError as e:
-                # if the template file is missing, call dialog box operator (missing template error) 
-                path = bpy.path.abspath(get_template(node.image.filepath))
-                if not pathlib.Path(path).exists():
-                    bpy.ops.anim.animtexture_insertmissingtemplate('INVOKE_DEFAULT')
-                else:
-                    self.report({'ERROR'}, "Unknown problem.")
+            success = self.create_new_image_from_template(node)
+            if not success:
                 return {'CANCELLED'}
             
-        # create keyframe
+        self.insert_next_keyframe(node, tree, crv, datapath)
+        update_node_color(node)
+
+        return {'FINISHED'}
+
+    def insert_next_keyframe(self, node, tree, crv, datapath):
         node.animtexturekey = node.animtexturekeynext
         node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         crv.keyframe_points[-1].interpolation = 'CONSTANT'
 
-        update_node_color(node)
+    def create_new_image(self, name, dimensions, bg_color):
+        if len(name) and name[-1:].isdigit():
+            name += "_"
 
-        return {'FINISHED'}
+        img = bpy.data.images.get(name)
+        if img: bpy.data.images.remove(img)
+        img = bpy.data.images.new(name,*dimensions,
+                                alpha=True)
+        
+        buffer = list(bg_color) * int(len(img.pixels) / 4)
+        img.pixels.foreach_set(buffer)
+        return img
 
+    def save_image(self, img, directory, name, filetype, padding):
+        ext = "." + str(filetype).split("_")[-1].lower()
+        path = os.path.join(directory, name + "0" * padding + ext)
+        img.filepath_raw = path
+        img.file_format = filetype
+        if img.file_format == 'OPEN_EXR':
+            img.alpha_mode = 'PREMUL'
+        img.save()
+
+    def create_sequence_node(self, img, node, path):
+        img.source = 'SEQUENCE'
+        img.filepath = path
+        node.image = img
+        node.image_user.use_auto_refresh = True
+        node.animtexturekeynext = 0
+        return node
+
+    def create_new_image_from_template(self, node):
+        dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
+        try:
+            # create new image from template
+            shutil.copyfile(
+                bpy.path.abspath(get_template(node.image.filepath)),
+                bpy.path.abspath(os.path.join(
+                    dir,
+                    name + str(node.animtexturekeynext).zfill(padding) + ext))
+                )
+            return True
+        except OSError as e:
+            # if the template file is missing, call dialog box operator (missing template error) 
+            path = bpy.path.abspath(get_template(node.image.filepath))
+            if not pathlib.Path(path).exists():
+                bpy.ops.anim.animtexture_insertmissingtemplate('INVOKE_DEFAULT')
+            else:
+                self.report({'ERROR'}, "Unknown problem.")
+            return False
 
 class ANIM_OT_duplicate_animtexture(Operator):
     """Duplicates the current animtexture file and insert it as a new keyframe."""
@@ -701,8 +710,8 @@ class ANIM_OT_insertmissingtemplate_animtexture(Operator):
         return {'FINISHED'}
 
     def draw(self, context):
-        self.layout.prop(self, "bg_color", text="Background Color")
         self.layout.label(text="The template file is missing. Create a new template file?")
+        self.layout.prop(self, "color", text="Background Color")
 
     def invoke(self, context, event):
         wm = context.window_manager
