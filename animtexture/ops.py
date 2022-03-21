@@ -211,8 +211,19 @@ class ANIM_OT_duplicate_animtexture(Operator):
         if key not in all_keys:
             self.report({'ERROR'}, "The keyframes seem to be faulty. Check that their interpolation is set to CONSTANT. Also file this as a bug.")
             return {'CANCELLED'}
+        
+        self.save_active_image(context,node, frame, key)
+        self.duplicate_active_image(node, key)
 
-        # save active image
+        # insert a new keyframe for the duplicated image
+        node.animtexturekey = node.animtexturekeynext
+        node.animtexturekeynext += 1
+        tree.keyframe_insert(data_path=datapath)
+        crv.keyframe_points[-1].interpolation = 'CONSTANT'
+
+        return {'FINISHED'}
+    
+    def save_active_image(self, context, node, frame, key):
         image_editor, restore_image_editor = get_image_editor(context)
         override = context.copy()
         override['area'] = image_editor
@@ -224,21 +235,12 @@ class ANIM_OT_duplicate_animtexture(Operator):
         res = bpy.ops.image.save(override)
         restore_image_editor()
 
-        # then duplicate it
+    def duplicate_active_image(self, node, key):
         dir, name, padding, ext = get_sequence_path_info(node.image.filepath)
         shutil.copyfile(
             bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
             bpy.path.abspath(os.path.join(dir, name + str(node.animtexturekeynext).zfill(padding) + ext))
             )
-
-        # insert a new keyframe for the duplicated image
-        node.animtexturekey = node.animtexturekeynext
-        node.animtexturekeynext += 1
-        tree.keyframe_insert(data_path=datapath)
-        crv.keyframe_points[-1].interpolation = 'CONSTANT'
-
-        return {'FINISHED'}
-
 
 class ANIM_OT_save_animtexture(Operator):
     """Saves the animated texture images."""
