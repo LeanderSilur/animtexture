@@ -484,7 +484,7 @@ class ANIM_OT_import_single_animtexture(Operator):
     bl_description = "Import a single image into an animtexture sequence"
     bl_options = {'REGISTER'}
 
-    import_filepath: bpy.props.StringProperty(
+    filepath: bpy.props.StringProperty(
         subtype="FILE_PATH",
         description="Filepath for single image file"
     )
@@ -504,30 +504,33 @@ class ANIM_OT_import_single_animtexture(Operator):
     def execute(self, context):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
-        dir, name, padding, ext1 = get_sequence_path_info(self.import_filepath)
+        dir, name, padding, ext1 = get_sequence_path_info(self.filepath)
         dir, name, padding, ext2 = get_sequence_path_info(node.image.filepath)
-
+        
         # abort, if the import file has a different extension
         if ext1 != ext2:
             self.report({'ERROR'}, "Wrong file extension.")
             return {'CANCELLED'}
-        
-        # movecopy the import file
+
+        self.movecopy_importfile(node, self.filepath, dir, name, padding, ext2)
+        self.insert_new_keyframe(node, tree)
+
+        return {'FINISHED'}
+
+    def movecopy_importfile(self, node, filepath, dir, name, padding, ext2):
         shutil.copyfile(
-            bpy.path.abspath(self.import_filepath),
+            bpy.path.abspath(filepath),
             bpy.path.abspath(os.path.join(dir,
                 name + str(node.animtexturekeynext).zfill(padding) + ext2))
             )
 
-        # insert a new keyframe for the imported image file
+    def insert_new_keyframe(self, node, tree):
         datapath = get_animkeydatapath(node.name)
         keyframe_points = get_keyframes_of_SNTI(tree, node)
         node.animtexturekey = node.animtexturekeynext
         node.animtexturekeynext += 1
         tree.keyframe_insert(data_path=datapath)
         keyframe_points[-1].interpolation = 'CONSTANT'
-
-        return {'FINISHED'}
 
 
 class ANIM_OT_export_animtexture(Operator):
