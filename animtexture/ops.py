@@ -256,6 +256,21 @@ class ANIM_OT_save_animtexture(Operator):
         )
 
     def execute(self, context):
+        images = self.store_node_and_keyframe_references(context, self.save_all)
+
+        if not len(images):
+            return {'FINISHED'}
+
+        errors = self.save_images_and_check_for_errors(context, images)
+        
+        if len(errors):
+            self.report({'WARNING'}, "Some files failed. Look in the console.")
+            print("Failed to save animtexture image sequences:")
+            for e in errors:
+                print(e)
+        return {'FINISHED'}
+    
+    def store_node_and_keyframe_references(self, context,save_all):
         class Img():
             def __init__(self,
                     image: Image,
@@ -264,29 +279,29 @@ class ANIM_OT_save_animtexture(Operator):
                 self.image = image
                 self.node = node
                 self.keyframes = keyframes
+        
         images = []
 
-        # store references to animtexture nodes and their keyframes
-        if self.save_all:
-            for mat in bpy.data.materials:
-                if (    not mat.use_nodes or
-                        not mat.node_tree.animation_data or
-                        not mat.node_tree.animation_data.action):
-                    continue
-                for node in mat.node_tree.nodes:
-                    keys = get_keyframes_of_SNTI(mat.node_tree, node)
-                    if len(keys) > 0:
-                        images.append(Img(node.image, node, keys))
+        if save_all:
+                for mat in bpy.data.materials:
+                    if (    not mat.use_nodes or
+                            not mat.node_tree.animation_data or
+                            not mat.node_tree.animation_data.action):
+                        continue
+                    for node in mat.node_tree.nodes:
+                        keys = get_keyframes_of_SNTI(mat.node_tree, node)
+                        if len(keys) > 0:
+                            images.append(Img(node.image, node, keys))
         else:
             node_tree = get_active_node_tree(context)
             node = get_active_SNTI(node_tree)
             keys = get_keyframes_of_SNTI(node_tree, node)
             if len(keys) > 0:
                 images.append(Img(node.image, node, keys))
+        return images
 
-        if not len(images):
-            return {'FINISHED'}
-
+    def save_images_and_check_for_errors(self, context, images):
+        
         # create error list, setup image editor override
         errors = []
         image_editor, restore_image_editor = get_image_editor(context)
@@ -315,16 +330,10 @@ class ANIM_OT_save_animtexture(Operator):
             # delete unused (left over) images
             if context.preferences.addons[__package__].preferences.reorganizeOnSave:
                 clean_directory(img.keyframes, absfilepath)
-
-        restore_image_editor()
         
-        if len(errors):
-            self.report({'WARNING'}, "Some files failed. Look in the console.")
-            print("Failed to save animtexture image sequences:")
-            for e in errors:
-                print(e)
-        return {'FINISHED'}
+        restore_image_editor()
 
+        return errors
 
 class ANIM_OT_import_animtexture(Operator):
     """Imports an image sequence as an animtexture sequence."""
