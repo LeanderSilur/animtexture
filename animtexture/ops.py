@@ -397,24 +397,61 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         # get info of the import files in directory
         dir, name, padding, ext = get_sequence_path_info(self.import_filepath)
         all_files = os.listdir(dir)
+        
+        self.duplicate_or_create_template(
+            dir, name, padding, ext, all_files, self.directory, self.import_filepath
+            )
+
+        files = self.create_list_of_files_and_sort(
+            name, padding, ext, all_files
+            )
+
+        keys = self.find_keys_by_comparison(
+            dir, name, padding, self.import_filepath, files
+            )
+
+        # movecopy key images into new working directory        
+        for i, key in enumerate(keys):
+            shutil.copyfile(
+                bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
+                bpy.path.abspath(os.path.join(self.directory, name + str(i).zfill(padding) + ext))
+                )
+
+        tree = get_active_node_tree(context)
+        node =  get_active_SNTI(tree)
+        datapath = get_animkeydatapath(node.name)
+        crv = tree.animation_data.action.fcurves.find(datapath)
+
+        crv = self.set_keyframes(keys, tree, datapath, crv)
+        self.set_image_in_node(context, node, crv, name, padding, ext, keys)
+
+        update_node_color(node)
+
+        msgbus_subscribe_to(node, tree)
+
+        update_texture(context)
+        return {'FINISHED'}
+
+    def duplicate_or_create_template(self, dir, name, padding, ext, all_files, directory, import_filepath):
 
         first_image_name = name + "0" * padding + ext
-        
+
         # duplicate template if it exists, otherwise create new empty template
         template_name = get_template(first_image_name)
         if template_name in all_files:
             shutil.copyfile(
                 bpy.path.abspath(os.path.join(dir, template_name)),
-                bpy.path.abspath(os.path.join(self.directory, template_name))
+                bpy.path.abspath(os.path.join(directory, template_name))
                 )
         else:
-            tmp_img = bpy.data.images.load(self.import_filepath)
+            tmp_img = bpy.data.images.load(import_filepath)
             buffer = [tmp_img.pixels[0] * 0] * len(tmp_img.pixels)
             tmp_img.pixels.foreach_set(buffer)
-            tmp_img.filepath_raw = os.path.join(self.directory, template_name)
+            tmp_img.filepath_raw = os.path.join(directory, template_name)
             tmp_img.save()
             bpy.data.images.remove(tmp_img)
 
+    def create_list_of_files_and_sort(self, name, padding, ext, all_files):
         # create list of files that are part of the sequence and sort them    
         length = len(name) + padding + len(ext)
         files = [f for f in all_files
@@ -424,10 +461,13 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
                 and f.endswith(ext)]
         files.sort()
 
+        return files
+
+    def find_keys_by_comparison(self, dir,  name, padding, import_filepath, files):
         # image a is compared to image b, if they are different
         # a new keyframe is added until the last image is reached
         index_start, index_end = len(name), len(name) + padding
-        img_a = os.path.basename(self.import_filepath)
+        img_a = os.path.basename(import_filepath)
         start = files.index(img_a)
         keys = [int(img_a[index_start:index_end])]
         for i in range(start + 1, len(files)):
@@ -437,20 +477,14 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
             if not files_are_same:
                 keys.append(int(img_b[index_start:index_end]))
                 img_a = img_b
+        
+        return keys
 
-        # movecopy key images into new working directory        
-        for i, key in enumerate(keys):
-            shutil.copyfile(
-                bpy.path.abspath(os.path.join(dir, name + str(key).zfill(padding) + ext)),
-                bpy.path.abspath(os.path.join(self.directory, name + str(i).zfill(padding) + ext))
-                )
-
+    def set_keyframes(self, keys, tree, datapath, crv):
         # create/overwrite keyframes
-        tree = get_active_node_tree(context)
-        node =  get_active_SNTI(tree)
+        
         attach_action_if_needed(tree)
-        datapath = get_animkeydatapath(node.name)
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        
         if not crv:
             crv = tree.animation_data.action.fcurves.new(datapath)
 
@@ -463,7 +497,10 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
             pt.co.x = keys[i]
             pt.co.y = i
             pt.interpolation = 'CONSTANT'
-            
+        
+        return crv
+
+    def set_image_in_node(self, context, node, crv, name, padding, ext, keys):
         # set new image path in node
         node.animtexturekeynext = keys[-1] + 1
         new_path = os.path.join(self.directory, name + "0" * padding + ext)
@@ -477,14 +514,6 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         node.image.source = 'SEQUENCE'
         node.image_user.use_auto_refresh = True
         node.animtexturekey = int(crv.evaluate(context.scene.frame_current))
-
-        update_node_color(node)
-
-        msgbus_subscribe_to(node, tree)
-
-        update_texture(context)
-        return {'FINISHED'}
-
 
 class ANIM_OT_import_single_animtexture(Operator):
     """Imports a single image into an animtexture sequence."""
