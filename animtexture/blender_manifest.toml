@@ -1,0 +1,29 @@
+schema_version = "1.0.0"
+
+id = "animtexture"
+version = "0.0.2"
+name = "AnimTexture"
+tagline = "Keyframe image textures as an editable image sequence"
+maintainer = "Arun Leander, Richard"
+type = "add-on"
+
+website = "https://github.com/LeanderSilur/animtexture"
+
+tags = ["Animation", "Material", "Paint"]
+
+blender_version_min = "4.4.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[permissions]
+files = "Read and write the image sequences of the animated textures"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/*.zip",
+  "/workspace.code-workspace",
+]

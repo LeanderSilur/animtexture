@@ -11,21 +11,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-bl_info = {
-    "name" : "animtexture",
-    "description" : "",
-    "author" : "Arun Leander, Richard",
-    "blender" : (2, 92, 0),
-    "version" : (0, 0, 1),
-    "location" : "View3D > Properties",
-    "warning" : "",
-    "support": "TESTING",
-    "doc_url": "https://github.com/LeanderSilur/animtexture/blob/main/README.md",
-    "tracker_url": "https://github.com/LeanderSilur/animtexture/issues",
-    "category" : "Animation",
-}
-
-
 import bpy
 from bpy.types import (
     ShaderNodeTexImage,
@@ -107,7 +92,7 @@ def unregister():
             handlers.frame_change_pre, handlers.save_pre,
             handlers.load_pre, handlers.load_post]:
         itemstodetach = [f for f in handlertype
-            if f.__module__ == "animtexture.ops"]
+            if f.__module__ == ops.__name__]
         while itemstodetach:
             handlertype.remove(itemstodetach.pop())
 

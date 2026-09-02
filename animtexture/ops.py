@@ -1,4 +1,3 @@
-from re import T
 import string
 import bpy
 from typing import List, Tuple
@@ -10,6 +9,7 @@ from bpy.types import (
 from bpy.props import (
     BoolProperty, EnumProperty, IntProperty, IntVectorProperty, StringProperty, CollectionProperty
     )
+from bpy_extras import anim_utils
 import os
 import shutil
 import pathlib
@@ -77,8 +77,8 @@ class ANIM_OT_insert_animtexture(Operator):
         attach_action_if_needed(tree)
 
         datapath = get_animkeydatapath(node.name)
-        crv = (tree.animation_data.action.fcurves.find(datapath)
-            or tree.animation_data.action.fcurves.new(datapath))
+        fcurves = get_animtexture_fcurves(tree, ensure=True)
+        crv = fcurves.find(datapath) or fcurves.new(datapath)
 
         if len(crv.keyframe_points) and (not node.image or node.image.source != "SEQUENCE"):
             if self.delete_keyframes:
@@ -99,8 +99,11 @@ class ANIM_OT_insert_animtexture(Operator):
     def execute(self, context):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
+        attach_action_if_needed(tree)
+
         datapath = get_animkeydatapath(node.name)
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        fcurves = get_animtexture_fcurves(tree, ensure=True)
+        crv = fcurves.find(datapath) or fcurves.new(datapath)
 
         if not len(crv.keyframe_points):
 
@@ -194,7 +197,7 @@ class ANIM_OT_duplicate_animtexture(Operator):
         tree = get_active_node_tree(context)
         node = get_active_SNTI(tree)
         datapath = get_animkeydatapath(node.name)
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        crv = get_animtexture_fcurves(tree).find(datapath)
         
         frame = int(context.scene.frame_current)
         key = int(crv.evaluate(frame))
@@ -205,14 +208,13 @@ class ANIM_OT_duplicate_animtexture(Operator):
 
         # save active image
         image_editor, restore_image_editor = get_image_editor(context)
-        override = context.copy()
-        override['area'] = image_editor
 
         image_editor.spaces.active.image = node.image
         image_editor.spaces.active.image_user.frame_duration = frame
         image_editor.spaces.active.image_user.frame_offset = key - frame
         context.scene.frame_set(frame)
-        res = bpy.ops.image.save(override)
+        with context.temp_override(**get_image_editor_override(image_editor)):
+            bpy.ops.image.save()
         restore_image_editor()
 
         # then duplicate it
@@ -258,7 +260,7 @@ class ANIM_OT_save_animtexture(Operator):
         # store references to animtexture nodes and their keyframes
         if self.save_all:
             for mat in bpy.data.materials:
-                if (    not mat.use_nodes or
+                if (    not mat.node_tree or
                         not mat.node_tree.animation_data or
                         not mat.node_tree.animation_data.action):
                     continue
@@ -279,8 +281,6 @@ class ANIM_OT_save_animtexture(Operator):
         # create error list, setup image editor override
         errors = []
         image_editor, restore_image_editor = get_image_editor(context)
-        override = context.copy()
-        override['area'] = image_editor
 
         # iterate trough animtexture image node list and check for errors
         for img in images:
@@ -299,7 +299,8 @@ class ANIM_OT_save_animtexture(Operator):
                 errors.append(i.name)
                 continue
             image_editor.spaces.active.image = i
-            bpy.ops.image.save_sequence(override)
+            with context.temp_override(**get_image_editor_override(image_editor)):
+                bpy.ops.image.save_sequence()
 
             # delete unused (left over) images
             if context.preferences.addons[__package__].preferences.reorganizeOnSave:
@@ -430,9 +431,10 @@ class ANIM_OT_import_set_working_directory_animtexture(Operator):
         node =  get_active_SNTI(tree)
         attach_action_if_needed(tree)
         datapath = get_animkeydatapath(node.name)
-        crv = tree.animation_data.action.fcurves.find(datapath)
+        fcurves = get_animtexture_fcurves(tree, ensure=True)
+        crv = fcurves.find(datapath)
         if not crv:
-            crv = tree.animation_data.action.fcurves.new(datapath)
+            crv = fcurves.new(datapath)
 
         while len(crv.keyframe_points) > len(keys):
             crv.keyframe_points.remove(crv.keyframe_points[0], fast=True)
@@ -766,6 +768,16 @@ def clean_directory(keyframe_points, absfilepath):
     return i
 
 
+def get_image_editor_override(area) -> dict:
+    """Context members needed to run an image operator inside `area`."""
+    override = {'area': area, 'space_data': area.spaces.active}
+    for region in area.regions:
+        if region.type == 'WINDOW':
+            override['region'] = region
+            break
+    return override
+
+
 def get_image_editor(context: Context):
     """Returns an image_editor area and a callback to restore the layout."""
 
@@ -813,14 +825,39 @@ def get_sequence_path_info(path: str) -> Tuple[str, int, str]:
 
 
 def attach_action_if_needed(tree:NodeTree):
-    """Create AnimationData and a new Action for node tree if required."""
+    """Create AnimationData, an Action and an Action Slot for the node tree if required."""
     if not tree.animation_data:
         tree.animation_data_create()
-    if not tree.animation_data.action:
+    anim_data = tree.animation_data
+    if not anim_data.action:
         suffix = 0
         while bpy.data.actions.find("AT" + str(suffix)) > 0:
             suffix += 1
-        tree.animation_data.action = bpy.data.actions.new("AT" + str(suffix))
+        anim_data.action = bpy.data.actions.new("AT" + str(suffix))
+    # Since Blender 4.4 an Action stores its curves per Slot, so the node tree
+    # needs a Slot assigned before any FCurve can be created.
+    if not anim_data.action_slot:
+        if len(anim_data.action_suitable_slots):
+            anim_data.action_slot = anim_data.action_suitable_slots[0]
+        else:
+            anim_data.action_slot = anim_data.action.slots.new(
+                id_type='NODETREE', name=tree.name)
+
+
+def get_animtexture_fcurves(tree:NodeTree, ensure:bool=False):
+    """Returns the FCurves which hold the animtexture keyframes of the node tree."""
+    anim_data = tree.animation_data if tree else None
+    if not anim_data or not anim_data.action or not anim_data.action_slot:
+        return None
+    if ensure:
+        channelbag = anim_utils.action_ensure_channelbag_for_slot(
+            anim_data.action, anim_data.action_slot)
+    else:
+        channelbag = anim_utils.action_get_channelbag_for_slot(
+            anim_data.action, anim_data.action_slot)
+    if not channelbag:
+        return None
+    return channelbag.fcurves
 
 
 def get_active_node_tree(context) -> NodeTree:
@@ -828,7 +865,7 @@ def get_active_node_tree(context) -> NodeTree:
     ob = context.object
     if len(ob.material_slots) == 0: return None
     mat = ob.material_slots[ob.active_material_index].material
-    if not mat or not mat.use_nodes: return None
+    if not mat or not mat.node_tree: return None
     return mat.node_tree
 
 
@@ -843,17 +880,15 @@ def get_active_SNTI(tree:ShaderNodeTree) -> ShaderNodeTexImage:
 
 def get_keyframes_of_SNTI(node_tree: NodeTree, node: Node) -> FCurveKeyframePoints:
     """Returns the keyframes of a SNTI (ShaderNodeTexImage). Does also accept None as an input."""
-    if (    not node_tree
-            or not node_tree.animation_data
-            or not node_tree.animation_data.action
-            or not node_tree.animation_data.action.fcurves):
-        return []
-    
     if not node or not node.type == 'TEX_IMAGE':
         return []
 
+    fcurves = get_animtexture_fcurves(node_tree)
+    if not fcurves:
+        return []
+
     datapath = get_animkeydatapath(node.name)
-    crv = node_tree.animation_data.action.fcurves.find(datapath)
+    crv = fcurves.find(datapath)
     if crv and len(crv.keyframe_points):
         return crv.keyframe_points
     return []
@@ -897,11 +932,15 @@ def update_texture(context):
 
     #if node: update_node_color(node)
 
-    if not tree.animation_data or not tree.animation_data.action:
+    if not node:
+        return
+
+    fcurves = get_animtexture_fcurves(tree)
+    if not fcurves:
         return
 
     datapath = get_animkeydatapath(node.name)
-    crv = tree.animation_data.action.fcurves.find(datapath)
+    crv = fcurves.find(datapath)
 
     if not crv:
         return
@@ -980,7 +1019,7 @@ def animtexture_loadpre(scene):
     Update textures."""
     errors = {}
     for mat in bpy.data.materials:
-        if (    not mat.use_nodes or
+        if (    not mat.node_tree or
                 not mat.node_tree.animation_data or
                 not mat.node_tree.animation_data.action):
             continue
@@ -1019,7 +1058,7 @@ def animtexture_loadpost(scene):
     Attach message bus handler to
     check if a valid image sequence is present."""
     for mat in bpy.data.materials:
-        if (    not mat.use_nodes or
+        if (    not mat.node_tree or
                 not mat.node_tree.animation_data or
                 not mat.node_tree.animation_data.action):
             continue
